@@ -32,8 +32,8 @@ blosum62 = substitution_matrices.load("BLOSUM62")
 
 ROOT_PATH = "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
 RESULTS_PATH = "%s/results" % ROOT_PATH
-ITAYFOLD_PATH = "%s/itayFold/" % ROOT_PATH
-WEIGHTS_PATH = "/%s/weights/" % ITAYFOLD_PATH
+MODELS_PATH = "%s/models/" % ROOT_PATH
+WEIGHTS_PATH = "/%s/weights/" % MODELS_PATH
 
 MSA_PATH = "%s/data/datasets/msa/" % ROOT_PATH
 
@@ -57,7 +57,7 @@ def fix_esm_path():
     
     # Specify the module name and path
     module_name = "esm"
-    module_path = ITAYFOLD_PATH 
+    module_path = MODELS_PATH 
     
     # Store the original sys.path
     original_sys_path = sys.path.copy()

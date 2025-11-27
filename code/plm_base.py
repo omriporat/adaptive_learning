@@ -80,8 +80,8 @@ class PlmWrapper():
 
 def plm_init(PLM_BASE_PATH):
     #PLM_BASE_PATH = "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
-    ITAYFOLD_PATH = "%s/itayFold/" % PLM_BASE_PATH
-    WEIGHTS_PATH = "/%s/weights/" % ITAYFOLD_PATH
+    MODELS_PATH = "%s/models/" % PLM_BASE_PATH
+    WEIGHTS_PATH = "/%s/weights/" % MODELS_PATH
         
     MODEL_WEIGHTS_FILE_NAME = "esm3/esm_model_weights.pth"
     LORA_WEIGHTS_FIlE_NAME =  "esm3/esm_lora_weights.pth"
@@ -94,7 +94,7 @@ def plm_init(PLM_BASE_PATH):
         
         # Specify the module name and path
         module_name = "esm"
-        module_path = ITAYFOLD_PATH 
+        module_path = MODELS_PATH 
         
         # Store the original sys.path
         original_sys_path = sys.path.copy()
