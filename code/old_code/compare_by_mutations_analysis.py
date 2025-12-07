@@ -133,6 +133,8 @@ sequence_df_path = "%s/data/configuration/fixed_unique_gfp_sequence_dataset_full
 llm_evaluation_paths = {
     "esm2_8m": "%s/results/from_wexac_eval/gfp/esm8m/zero_shot" % base_path,
     "esm2_35m": "%s/results/from_wexac_eval/gfp/esm35m/zero_shot" % base_path,
+    "esm2_35m_msa_backbone": "%s/results/from_wexac_eval/gfp/msa_backbone/esm35m/zero_shot" % base_path,
+    "esm2_35m_msa_backbone_no_norm": "%s/results/from_wexac_eval/gfp/msa_backbone_no_norm/esm35m/zero_shot" % base_path,
     "esm2_650m": "%s/results/from_wexac_eval/gfp/esm650m/zero_shot" % base_path
 }
 nmuts_column = "num_muts"
@@ -141,6 +143,9 @@ mutations_to_use = range(1, 12)
 seq_df = pd.read_csv(sequence_df_path)
 seq_df = seq_df[np.isin(seq_df[nmuts_column].to_numpy(), np.array(mutations_to_use))]  # subset by mutations
 one_hot = get_one_hot_encoding(seq_df, "L42", "V224")
+si = np.where(seq_df.columns == "L42")[0][0]
+ei = np.where(seq_df.columns == "V224")[0][0]
+assert one_hot.shape[1] == sum([len(pd.unique(seq_df[C])) for C in seq_df.columns[si:(ei+1)]])
 
 # Collect and sort LLM data for each model
 llm_data = {}
@@ -161,7 +166,7 @@ for llm_name in llm_data:
 all_results = []
 
 # Train on I test on the rest
-for i in range(1, 6):
+for i in range(1, 7):
 
     ohe_subset = (seq_df[nmuts_column] <= i).to_numpy()
 
@@ -197,7 +202,7 @@ for i in range(1, 6):
     }
 
     # For each LLM, fit and predict, and add to result dict
-    for llm_name in ["esm2_8m", "esm2_35m", "esm2_650m"]:
+    for llm_name in ["esm2_8m", "esm2_35m", "esm2_650m", "esm2_35m_msa_backbone", "esm2_35m_msa_backbone_no_norm"]:
         sorted_emb = llm_data[llm_name]["emb"]
         sorted_llm_df = llm_data[llm_name]["df"]
         llm_subset = (sorted_llm_df["mutations"] <= i).to_numpy()
@@ -226,7 +231,6 @@ for i in range(1, 6):
     # Build dataframe for this split
     results_df = pd.DataFrame(result_dict)
     # Save each df separately as train_{i}.csv
-    results_path = f"{base_results_path}/train_{i}.csv"
+    results_path = f"{base_results_path}/f_train_{i}.csv"
     results_df.to_csv(results_path, index=False)
     
-
