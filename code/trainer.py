@@ -28,12 +28,6 @@ from dataset import *
 from embedder import *
 from plm_base import *
 
-# Example config.yaml:
-# ---
-# root_path: "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
-# dataset_path: "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning/data/configuration/fixed_unique_gfp_sequence_dataset_full_seq.csv"
-# save_path: "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning/pretraining/triplet_loss_backbones/one_shot/"
-# weights_path: "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning/pretraining/triplet_loss_backbones/final_model.pt"
 
 
 
@@ -58,10 +52,6 @@ def get_indices(sequence_df, nmuts, nmuts_column="num_of_muts", rev=False, verbo
 
 def select_design_pos(seq):
     return([seq[21], seq[23], seq[24]])
-
-# epinnet = SeqMLP("plm_embedding", 3, select_design_pos, plm_name="esm2_t12_35M_UR50D")
-
-# epinnet.encode("MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKRHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKTRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYN")
 
 def train_plm_triplet_model(
     plm_name: str,
