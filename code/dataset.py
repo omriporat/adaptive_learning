@@ -200,7 +200,8 @@ class PREActivityDataset(Dataset):
                      finalize_func,
                      eval_train=True,
                      eval_test=True,
-                     internal_batch_size=20):
+                     internal_batch_size=20, 
+                     **kwargs):
 
             model = model.to(self.device)
             model.eval()
@@ -260,9 +261,10 @@ class PREActivityDataset(Dataset):
                                                           aggregated_evaluated_data, 
                                                           self.device, 
                                                           batch_idx=idx,
-                                                          dataset=working_dataset)
+                                                          dataset=working_dataset,
+                                                          **kwargs)
                     
-                evaluated_data_to_save = finalize_func(aggregated_evaluated_data, working_dataset)
+                evaluated_data_to_save = finalize_func(aggregated_evaluated_data, working_dataset, **kwargs)
                 evaluated_data_to_save["indices"] = indices_to_save
 
                 prefix_folder = os.path.join(self.evaluation_path, path_prefix)
