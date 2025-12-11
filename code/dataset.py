@@ -20,7 +20,8 @@ class PREDataset(Dataset):
                  external_encoding=None,
                  cache=True,
                  sequence_column_name='full_seq',                 
-                 activity_column_name='inactive',   
+                 label_column_name='activity',
+                 pad_region_label=None,
                  labels_dtype=torch.float64):
             
             
@@ -31,14 +32,22 @@ class PREDataset(Dataset):
         self.dataset_path = dataset_path    
         self.sequence_dataframe = pd.read_csv(dataset_path)            
         self.size = self.sequence_dataframe.shape[0] # ToDo: read from dataset        
-            
-        self.sequence_column_name=sequence_column_name
-        self.activity_column_name=activity_column_name
         
-        self.labels = torch.tensor(self.sequence_dataframe[self.activity_column_name], dtype=labels_dtype)
+        self.sequence_column_name=sequence_column_name
+        self.label_column_name=label_column_name
+
+        if self.label_column_name is not None and self.label_column_name in self.sequence_dataframe.columns:        
+            self.labels = torch.tensor(self.sequence_dataframe[self.label_column_name], dtype=labels_dtype)
+        else: 
+            self.labels = torch.tensor(np.arange(0, self.size), dtype=torch.int32)
+
+        if pad_region_label is not None and pad_region_label in self.sequence_dataframe.columns:
+            self.pad_region = self.sequence_dataframe[pad_region_label].to_numpy() # torch doesn't support strings
+        else:
+            self.pad_region = None
                     
         self.encoding_function = encoding_function
-        self.cache_path = "%s_mlp_cache/" % dataset_path.split(".csv")[0]       
+        self.cache_path = "%s_cache/" % dataset_path.split(".csv")[0]       
         self.cache = cache
     
         
@@ -54,12 +63,12 @@ class PREDataset(Dataset):
             if self.cache and tokenized_sequences_filename in cached_files:
                 self.encoded_tensor = torch.load("%s/misc/%s" % (self.cache_path, tokenized_sequences_filename))
             else:
-                print("Tokenizing sequences in a non-DMS dataset, this may take a while")                              
+                print("[INFO] Tokenizing sequences, this may take a while")                              
                 encoded_sequences = [torch.tensor(self.encoding_function(seq)) for seq in self.sequence_dataframe[self.sequence_column_name].to_list()]
                 self.encoded_tensor = torch.stack(encoded_sequences, dim=0)
                 
             if self.cache:        
-                print("Caching \n\t(1) %s" % (tokenized_sequences_filename))
+                print("[INFO] Caching \n\t(1) %s" % (tokenized_sequences_filename))
                 torch.save(self.encoded_tensor, "%s/misc/%s" % \
                            (self.cache_path, tokenized_sequences_filename))
                     
@@ -91,6 +100,10 @@ class PREDataset(Dataset):
 
         self.encoded_tensor = self.encoded_tensor[indices_tensor,:]            
         self.labels = self.labels[indices_tensor]
+
+        # pad region is a string thus cannot be saved as a tensor
+        if self.pad_region is not None:
+            self.pad_region = self.pad_region[indices_tensor.to_numpy().astype(int)]
         
         self.size = self.labels.shape[0]
 
@@ -99,6 +112,10 @@ class PREDataset(Dataset):
                 
     def __len__(self):
         return self.size
+
+    def get_pad_regions(self):
+        return self.pad_region
+        
 
 class PREActivityDataset(Dataset):
         def __init__(self,
@@ -113,7 +130,7 @@ class PREActivityDataset(Dataset):
                      cache=True,
                      lazy_load=True,
                      sequence_column_name='full_seq',
-                     activity_column_name='inactive',
+                     label_column_name='inactive',
                      ref_seq="",
                      mini_batch_size=20,
                      positive_label=0,
@@ -133,7 +150,7 @@ class PREActivityDataset(Dataset):
             self.cache=cache
             self.lazy_load=lazy_load
             self.sequence_column_name=sequence_column_name
-            self.activity_column_name=activity_column_name
+            self.label_column_name=label_column_name
             self.ref_seq=ref_seq
             self.positive_label=positive_label
             self.negative_label=negative_label
@@ -161,7 +178,7 @@ class PREActivityDataset(Dataset):
                                    self.external_encoding,
                                    self.cache,
                                    self.sequence_column_name,
-                                   self.activity_column_name,
+                                   self.label_column_name,
                                    self.labels_dtype)
                     
             self.size = len(self.train_dataset)
@@ -183,7 +200,7 @@ class PREActivityDataset(Dataset):
                                     self.external_encoding,
                                     self.cache,
                                     self.sequence_column_name,
-                                    self.activity_column_name,
+                                    self.label_column_name,
                                     self.labels_dtype)
                     self.loaded = True
                     
@@ -249,12 +266,12 @@ class PREActivityDataset(Dataset):
                 aggregated_evaluated_data = {}
                 
                 num_sequences = len(working_dataset)
-                print(f"[DEBUG] Evaluating on device: {self.device}")
-                print(f"About to evaluate {num_sequences} sequences on {'train' if is_train else 'test'} set.")                
+                print(f"[INFO] Evaluating on device: {self.device}")
+                print(f"[INFO] About to evaluate {num_sequences} sequences on {'train' if is_train else 'test'} set.")                
                 
                 for idx, data in enumerate(dataloader):                
                     if idx % ((len(dataloader) // 20) + 1) == 0:
-                        print(f"[DEBUG] Progress: {idx}/{len(dataloader)} batches evaluated")
+                        print(f"[INFO] Progress: {idx}/{len(dataloader)} batches evaluated")
                         
                     aggregated_evaluated_data = eval_func(model, 
                                                           data, 

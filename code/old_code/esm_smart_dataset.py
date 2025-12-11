@@ -29,7 +29,7 @@ class EsmBaseSequenceActivityDataset(Dataset):
                  get_mutated_position_function=None,
                  cache=False,
                  sequence_column_name='seq',
-                 activity_column_name='fitness',
+                 label_column_name='fitness',
                  ref_seq="",
                  s_i=-1,
                  e_i=-1,                 
@@ -48,11 +48,11 @@ class EsmBaseSequenceActivityDataset(Dataset):
         self.size = self.sequence_dataframe.shape[0] # ToDo: read from dataset        
         
         self.sequence_column_name=sequence_column_name
-        self.activity_column_name=activity_column_name
+        self.label_column_name=label_column_name
         self.ref_seq = ref_seq
     
         
-        self.labels = torch.tensor(self.sequence_dataframe[self.activity_column_name], dtype=labels_dtype)
+        self.labels = torch.tensor(self.sequence_dataframe[self.label_column_name], dtype=labels_dtype)
         
         self.get_mutated_position_function = None        
         self.mut_info = None
@@ -216,7 +216,7 @@ class EsmSequenceActivityDataset(EsmBaseSequenceActivityDataset):
                  use_structure=False,
                  return_full_structural_info=False,
                  sequence_column_name='seq',
-                 activity_column_name='fitness',
+                 label_column_name='fitness',
                  ref_seq="",
                  return_keys=["sequence","structure", "plddt", "residue_index",
                               "coords", "function", "sasa", "ss8"],
@@ -229,7 +229,7 @@ class EsmSequenceActivityDataset(EsmBaseSequenceActivityDataset):
                          frozen_esm_tokenizer.sequence.encode,
                          get_mutated_position_function,
                          sequence_column_name,
-                         activity_column_name,
+                         label_column_name,
                          ref_seq,
                          s_i,
                          e_i,
@@ -472,7 +472,7 @@ class Esm2SequenceActivityDataset(EsmBaseSequenceActivityDataset):
                      cache=True,
                      model_name="esm2",
                      sequence_column_name='seq',
-                     activity_column_name='fitness',
+                     label_column_name='fitness',
                      ref_seq="",
                      s_i=-1,
                      e_i=-1,
@@ -492,7 +492,7 @@ class Esm2SequenceActivityDataset(EsmBaseSequenceActivityDataset):
                              get_mutated_position_function,
                              cache,
                              sequence_column_name,
-                             activity_column_name,
+                             label_column_name,
                              ref_seq,
                              s_i,
                              e_i,
@@ -563,7 +563,7 @@ class Esm2SequenceActivityContrastiveDataset(Esm2SequenceActivityDataset):
                      cache=True,
                      model_name="esm2",
                      sequence_column_name='seq',
-                     activity_column_name='fitness',
+                     label_column_name='fitness',
                      ref_seq="",
                      positive_label=0,
                      negative_label=1,
@@ -581,7 +581,7 @@ class Esm2SequenceActivityContrastiveDataset(Esm2SequenceActivityDataset):
                              cache,
                              model_name,
                              sequence_column_name,
-                             activity_column_name,
+                             label_column_name,
                              ref_seq,
                              s_i,
                              e_i,
@@ -621,7 +621,7 @@ class Esm2SequenceActivityContrastiveDatasetAdvancedMask(Esm2SequenceActivityDat
                      cache=True,
                      model_name="esm2",
                      sequence_column_name='seq',
-                     activity_column_name='fitness',
+                     label_column_name='fitness',
                      ref_seq="",
                      positive_label=0,
                      negative_label=1,
@@ -639,7 +639,7 @@ class Esm2SequenceActivityContrastiveDatasetAdvancedMask(Esm2SequenceActivityDat
                              cache,
                              model_name,
                              sequence_column_name,
-                             activity_column_name,
+                             label_column_name,
                              ref_seq,
                              s_i,
                              e_i,
@@ -754,7 +754,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
                      lazy_load=True,
                      model_name="esm2",
                      sequence_column_name='seq',
-                     activity_column_name='fitness',
+                     label_column_name='fitness',
                      ref_seq="",
                      adjusted_full_partial_ratio=1,
                      mini_batch_size=20,
@@ -781,7 +781,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
             self.lazy_load=lazy_load,
             self.model_name=model_name
             self.sequence_column_name=sequence_column_name
-            self.activity_column_name=activity_column_name
+            self.label_column_name=label_column_name
             self.ref_seq=ref_seq
             self.adjusted_full_partial_ratio=adjusted_full_partial_ratio
             self.mini_batch_size=mini_batch_size
@@ -814,7 +814,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
                                                            cache,
                                                            model_name,
                                                            sequence_column_name,
-                                                           activity_column_name,
+                                                           label_column_name,
                                                            ref_seq,
                                                            positive_label,
                                                            negative_label,
@@ -831,7 +831,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
                                                        cache,
                                                        model_name,
                                                        sequence_column_name,
-                                                       activity_column_name,
+                                                       label_column_name,
                                                        ref_seq,
                                                        positive_label,
                                                        negative_label,
@@ -913,7 +913,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
                                                 self.cache,
                                                 self.model_name,
                                                 self.sequence_column_name,
-                                                self.activity_column_name,
+                                                self.label_column_name,
                                                 self.ref_seq,
                                                 self.e_i,
                                                 self.s_i,
@@ -930,7 +930,7 @@ class Esm2SequenceActivityTrainTest(Dataset):
                                                 self.cache,
                                                 self.model_name,
                                                 self.sequence_column_name,
-                                                self.activity_column_name,
+                                                self.label_column_name,
                                                 self.ref_seq,
                                                 self.e_i,
                                                 self.s_i,

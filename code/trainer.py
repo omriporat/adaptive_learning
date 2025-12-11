@@ -103,7 +103,7 @@ def train_plm_triplet_model(
     emb_only = train_type  == "triplet"
 
     if model is None:
-        model = plmTrunkModel(
+        model = plmEmbeddingModel(
             plm_name=plm_name,
             opmode=opmode,
             emb_only=emb_only,
@@ -382,16 +382,17 @@ def train_msa_backbone(
     logits_only = True
 
     if model is None:
-        model = plmTrunkModel(
+        model = plmEmbeddingModel(
             plm_name=plm_name,
-            opmode=opmode,
-            logits_only=logits_only,
-            hidden_layers=hidden_layers,
-            activation=activation,
-            emb_only=False,
-            layer_norm=layer_norm,
-            activation_on_last_layer=activation_on_last_layer,
-            device=device
+            emb_only=False
+            # opmode=opmode,
+            # logits_only=logits_only,
+            # hidden_layers=hidden_layers,
+            # activation=activation,
+            # emb_only=False,
+            # layer_norm=layer_norm,
+            # activation_on_last_layer=activation_on_last_layer,
+            # device=device
         ).to(device)
     else:
         model = model.to(device)
@@ -454,8 +455,12 @@ def train_msa_backbone(
             y = batch[1].to(device)                  
             # Ensure y is on CPU before converting to numpy, for CUDA compatibility
             y_cpu = y.detach().cpu().numpy()
+
+            pad_regions = train_test_dataset.train_dataset.get_pad_regions()[y_cpu].tolist()
+
             ranges = mine_ranges(
-                train_test_dataset.train_dataset.sequence_dataframe["pad_regions"].iloc[y_cpu].to_list(),
+                #train_test_dataset.train_dataset.sequence_dataframe["pad_regions"].iloc[y_cpu].to_list(),
+                pad_regions,
                 y_cpu
             )
             # Apply random noise to the sequence
@@ -536,16 +541,16 @@ def train_evaluate_plms(config):
 
     emb_only = config["train_type"] == "triplet"
     
-    model = plmTrunkModel(
+    model = plmEmbeddingModel(
         plm_name=plm_name,
-        opmode="pos",
-        emb_only = emb_only,
-        hidden_layers=[516,256],
-        activation="relu",
-        layer_norm=False,
-        activation_on_last_layer=False,
-        specific_pos=config["pos_to_use"],
-        device=device
+        emb_only = emb_only
+        # opmode="pos",
+        # hidden_layers=[516,256],
+        # activation="relu",
+        # layer_norm=False,
+        # activation_on_last_layer=False,
+        # specific_pos=config["pos_to_use"],
+        # device=device
     ).to(device)
 
     # Load weights for plm backbone only if config has load_weights set to True
@@ -565,7 +570,7 @@ def train_evaluate_plms(config):
         cache=True,
         lazy_load=True,
         sequence_column_name=config["sequence_column_name"],
-        activity_column_name=config["activity_column_name"],
+        label_column_name=config["label_column_name"],
         ref_seq=ref_seq,
         labels_dtype=torch.float32,
         device=device
@@ -649,7 +654,7 @@ def train_evaluate_epinnet(config):
         cache=True,
         lazy_load=True,
         sequence_column_name='full_seq',
-        activity_column_name='inactive',
+        label_column_name='inactive',
         ref_seq=config["ref_seq"],
         labels_dtype=torch.float32,
         device=device
@@ -689,16 +694,16 @@ def train_evaluate_msa_backbone(config):
         plm_name = "esm2_t12_35M_UR50D"
 
     msa_backbone_model =\
-     plmTrunkModel(
+     plmEmbeddingModel(
         plm_name=plm_name,
-        opmode="pos",
-        emb_only = False,
-        logits_only = True,
-        hidden_layers=[516,256],
-        activation="relu",
-        layer_norm=False,
-        activation_on_last_layer=False,
-        device=device
+        emb_only = False
+        # opmode="pos",
+        # logits_only = True,
+        # hidden_layers=[516,256],
+        # activation="relu",
+        # layer_norm=False,
+        # activation_on_last_layer=False,
+        # device=device
     ).to(device)
 
 
@@ -718,7 +723,8 @@ def train_evaluate_msa_backbone(config):
         cache=True,
         lazy_load=True,
         sequence_column_name=config["sequence_column_name"],
-        activity_column_name=config["activity_column_name"],
+        pad_region_label=config["pad_region_label"],
+        label_column_name=None, # This should be none so the labels would be just the indices
         ref_seq=config["ref_seq"],
         labels_dtype=torch.float32,
         device=device

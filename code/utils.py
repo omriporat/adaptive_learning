@@ -14,10 +14,10 @@ import time
 import string
 
 
-from Bio import pairwise2
-from Bio.Seq import Seq
-from Bio.Align import substitution_matrices
-from Bio import SeqIO
+# from Bio import pairwise2
+# from Bio.Seq import Seq
+# from Bio.Align import substitution_matrices
+# from Bio import SeqIO
 
 
 def fitness_from_prob(pssm, wt_tensor, variant_tensor):    

@@ -79,8 +79,8 @@ class PlmWrapper():
 
 def plm_init(PLM_BASE_PATH):
     #PLM_BASE_PATH = "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
-    ITAYFOLD_PATH = "%s/itayFold/" % PLM_BASE_PATH
-    WEIGHTS_PATH = "/%s/weights/" % ITAYFOLD_PATH
+    MODELS_PATH = "%s/models/" % PLM_BASE_PATH
+    WEIGHTS_PATH = "/%s/weights/" % MODELS_PATH
         
     MODEL_WEIGHTS_FILE_NAME = "esm3/esm_model_weights.pth"
     LORA_WEIGHTS_FIlE_NAME =  "esm3/esm_lora_weights.pth"
@@ -93,7 +93,7 @@ def plm_init(PLM_BASE_PATH):
         
         # Specify the module name and path
         module_name = "esm"
-        module_path = ITAYFOLD_PATH 
+        module_path = MODELS_PATH 
         
         # Store the original sys.path
         original_sys_path = sys.path.copy()
@@ -416,11 +416,14 @@ class plmEmbeddingModel(torch.nn.Module):
         plm_tokenizer = plm_obj.get_tokenizer()
         vocab, plm_d_model = plm_obj.get_token_vocab_dim()
         V = len(vocab)
+
+        self.plm_name = plm_name
         self.tokenizer = plm_tokenizer
         self.plm = plm.to(device)
         self.last_layer = plm_obj.get_n_layers()
         self.forward_func = plm_obj.get_forward()
         self.vocab = vocab
+        
         if emb_only:
             self.final_forward = self._emb_only_forward            
         elif logits_only:

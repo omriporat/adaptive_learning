@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_type", type=str, help="Type of training to use (e.g., 'direct_mlp')")
     parser.add_argument("--nmuts_column", type=str, help="Column name for number of mutations")
     parser.add_argument("--sequence_column_name", type=str, help="Column name for sequence")
-    parser.add_argument("--activity_column_name", type=str, help="Column name for activity")
+    parser.add_argument("--label_column_name", type=str, help="Column name for activity")
     parser.add_argument("--first_column_name", type=str, help="First column name for encoding")
     parser.add_argument("--last_column_name", type=str, help="Last column name for encoding")
     parser.add_argument("--plm_name", type=str, help="PLM model name")

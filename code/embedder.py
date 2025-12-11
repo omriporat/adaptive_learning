@@ -26,7 +26,7 @@ def ab_embedding_evaluate_heavy_or_light_chain(model, data, agg_dict, device=tor
 
 
 
-    heavy_or_light_only = kwargs["heavy_or_light_only"] if "heavy_or_light_only" in kwargs else None
+    heavy_or_light_only = kwargs["heavy_or_light_only"] if "heavy_or_light_only" in kwargs else "heavy_only"
     separator_location = batch == 3
     separator_location_idx = torch.where(separator_location[0])[0][0]
 
@@ -60,10 +60,10 @@ def ab_embedding_evaluate_heavy_or_light_chain(model, data, agg_dict, device=tor
     embeddings_final = embeddings_without_pad / N_used_tokens
     embeddings_final = torch.nn.functional.normalize(embeddings_final, dim=1)
 
-    if HEAVY_OR_LIGHT_ONLY not in agg_dict.keys():
-        agg_dict[HEAVY_OR_LIGHT_ONLY] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
+    if heavy_or_light_only not in agg_dict.keys():
+        agg_dict[heavy_or_light_only] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
 
-    agg_dict[HEAVY_OR_LIGHT_ONLY] = torch.cat([agg_dict[HEAVY_OR_LIGHT_ONLY], embeddings_final.detach().cpu()], dim=0)
+    agg_dict[heavy_or_light_only] = torch.cat([agg_dict[heavy_or_light_only], embeddings_final.detach().cpu()], dim=0)
 
     return agg_dict
 
