@@ -127,7 +127,7 @@ def ab_embeddings_evaluate_function(model, data, agg_dict, device=torch.device("
     return agg_dict
 
 @torch.no_grad()
-def ab_embeddings_finalize_function(agg_dict, dataset):
+def ab_embeddings_finalize_function(agg_dict, dataset, **kwargs):
     return agg_dict
 
 @torch.no_grad()
@@ -201,7 +201,11 @@ def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu
     x = data[0].to(device)
     y = data[1].to(device)
 
-    triplet_loss = torch.nn.TripletMarginLoss(margin=margin, eps=1e-7)
+    
+    calc_triplets = "triplet_loss" in kwargs
+    
+    if calc_triplets:
+        triplet_loss = torch.nn.TripletMarginLoss(margin=margin, eps=1e-7)
 
     hh = model(x)
 
@@ -211,7 +215,7 @@ def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu
         emb = torch.nn.functional.normalize(hh[:, torch.tensor(pos_to_use), :], dim=1).mean(dim=1)
         emb = torch.nn.functional.normalize(emb, dim=1)
 
-    if "trip_loss" not in agg_dict.keys():
+    if calc_triplets and "trip_loss" not in agg_dict.keys():
         agg_dict['trip_loss'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
     
     if "embeddings" not in agg_dict.keys():
@@ -220,21 +224,27 @@ def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu
     if "ground_truth" not in agg_dict.keys():
         agg_dict['ground_truth'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
 
-    trips = torch.tensor(online_mine_triplets(y))
 
-    if len(trips) > 0:
-        emb_trip = emb[trips]
-        trip_loss = triplet_loss(emb_trip[:, 0, :], emb_trip[:, 1, :], emb_trip[:, 2, :])
-        agg_dict["trip_loss"] = torch.cat([agg_dict['trip_loss'], trip_loss.detach().cpu().reshape(-1)], dim=0)
+    if calc_triplets:
+        trips = torch.tensor(online_mine_triplets(y))
+        if len(trips) > 0:
+            emb_trip = emb[trips]
+            trip_loss = triplet_loss(emb_trip[:, 0, :], emb_trip[:, 1, :], emb_trip[:, 2, :])
+            agg_dict["trip_loss"] = torch.cat([agg_dict['trip_loss'], trip_loss.detach().cpu().reshape(-1)], dim=0)
 
     agg_dict["embeddings"] = torch.cat([agg_dict['embeddings'], emb.detach().cpu()], dim=0)
     agg_dict["ground_truth"] = torch.cat([agg_dict["ground_truth"], y.detach().cpu().reshape(-1)], dim=0)
 
     torch.cuda.empty_cache() 
+    
     return agg_dict
 
 @torch.no_grad()
-def embeddings_finalize_function(agg_dict, dataset):
+def embeddings_finalize_function(agg_dict, dataset, **kwargs):
+    return agg_dict
+
+@torch.no_grad()
+def tsne_embeddings_finalize_function(agg_dict, dataset):
     embeddings = agg_dict["embeddings"].cpu().numpy()
     ground_truth = agg_dict["ground_truth"].cpu().numpy()
 

@@ -119,7 +119,6 @@ class PREDataset(Dataset):
 
 class PREActivityDataset(Dataset):
         def __init__(self,
-                     train_project_name,
                      evaluation_path,
                      dataset_path,
                      train_indices,
@@ -140,7 +139,7 @@ class PREActivityDataset(Dataset):
             
             self.train_indices=train_indices,
             self.test_indices=test_indices,
-            self.train_project_name=train_project_name
+
             self.evaluation_path=evaluation_path
             self.dataset_path=dataset_path         
             

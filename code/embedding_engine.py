@@ -64,27 +64,23 @@ def ab_run_dataset(model, dataset_path, indices=None, heavy_or_light_only=None):
         internal_batch_size=20
     )
 
-def run_dataset(model, dataset_path, indices=None):
+def run_dataset(model, model_name, dataset_path, evaluation_path, sequence_column_name, indices=None, **kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+
     print(f"\t\t[INFO] Using device: {device}")
+    print(f"\t\t[INFO] Running dataset: {dataset_path} with model: {model_name} and indices: {indices}")
 
-    ab_model = None
-
-    if indices != -1:
-        indices_str = indices
-        indices = indices.split("_")
-        indices = [i for i in range(int(indices[0]), int(indices[1]))]
-        eval_path = dataset_path + f"/{indices_str}"
+    if indices is not None:
+        indices_str = "%s_%s" % (indices[0], indices[-1])
+        eval_path = os.path.join(evaluation_path, indices_str)
         os.makedirs(eval_path, exist_ok=True)
     else:
         indices = None
-        eval_path = dataset_path
-
-    dataset_path = dataset_path + "/sequences.csv"
-
+        eval_path = evaluation_path
+    
+    print(f"\t\t[INFO] Evaluation path: {eval_path}")
     train_test_dataset = PREActivityDataset(
-        train_project_name="",
-        encoding_identifier="",
+        encoding_identifier=model_name,
         evaluation_path=eval_path,
         dataset_path=dataset_path,
         train_indices=indices,
@@ -92,33 +88,31 @@ def run_dataset(model, dataset_path, indices=None):
         encoding_function=model.encode,
         cache=True,
         lazy_load=True,
-        sequence_column_name="formatted_sequences",
-        label_column_name="index",
+        sequence_column_name=sequence_column_name,
+        label_column_name=None,
         labels_dtype=torch.float32,
         device=device
     )
 
+    has_antibodies = 'antibodies' in kwargs
+
+    embedding_function = embeddings_evaluate_function if not has_antibodies else ab_embedding_evaluate_heavy_or_light_chain
+    finalize_function = embeddings_finalize_function if not has_antibodies else ab_embeddings_finalize_function
+
     train_test_dataset.evaluate(
         model,
-        ab_embedding_evaluate_heavy_or_light_chain if heavy_or_light_only is not None else ab_embeddings_evaluate_function, 
-        ab_embeddings_finalize_function,
+        embedding_function,
+        finalize_function,
         eval_train=True,
         eval_test=False,
-        internal_batch_size=20
-    )
-
+        internal_batch_size=20,
+        **kwargs)
 
 def _lock_wrapper(file_name):
     pass
 
 def _unlock_wrapper(file_name):  
     pass
-
-# key_dataset_paths = ["/home/labs/fleishman/itayta/CADABRE/cadabre_works_key_dataset.csv",
-#                      "/home/labs/fleishman/itayta/CADABRE/jobs_key_dataset.csv"]
-
-# #for key_dataset_path in key_dataset_paths:
-# worker(key_dataset_paths[0])
 
 
 def __validate_dataset(args):
@@ -166,6 +160,22 @@ def worker(args):
     if not os.path.exists(key_dataset_path):
         raise FileNotFoundError(f"key_dataset.csv not found at: {key_dataset_path}")
     
+
+    required_job_args = ["model", "sequence_colname", "evaluation_path"]
+    for required_arg in required_job_args:
+        if not hasattr(job_args, required_arg) or getattr(job_args, required_arg) is None:
+            raise ValueError(f"Job argument '{required_arg}' must be provided in job_args.json.")
+
+    model = plmEmbeddingModel(plm_name=job_args.model)
+    evaluation_path = job_args.evaluation_path
+    evaluations_dir = os.path.join(evaluation_path, "evaluations")
+    os.makedirs(evaluations_dir, exist_ok=True)
+
+    embedding_options = {}
+    for arg in ["average_embeddings", "positions_to_embed", "antibodies"]:
+        if hasattr(job_args, arg) and getattr(job_args, arg) is not None:
+            embedding_options[arg] = getattr(job_args, arg)
+
     is_working = True
 
     while is_working:
@@ -200,8 +210,7 @@ def worker(args):
                     completed_successfully = False
 
                     try:
-                        # Read the job file, perform the actual work here
-                        job_df = pd.read_csv(job_f)
+                        # Read the job file, perform the actual work here                
                         print(f"[INFO] Processing job: {job_file_path}")
 
                         
@@ -214,7 +223,17 @@ def worker(args):
                                 indices = list(range(int(m.group(1)), int(m.group(2)) + 1))
                         elif not indices or str(indices).lower() == 'none':
                             indices = None
-                        ab_run_dataset(dataset_path, indices)
+
+                        run_dataset(model,
+                                    job_args.model,
+                                    dataset_path, 
+                                    evaluations_dir, 
+                                    job_args.sequence_colname,
+                                    indices,
+                                    **embedding_options)
+
+                        torch.cuda.empty_cache()
+
                         completed_successfully = True
 
                         # After successful processing, close and delete the job file
@@ -295,7 +314,6 @@ def embed_parallel(args):
     
     # Just to cache
     train_test_dataset = PREActivityDataset(
-        train_project_name="",
         encoding_identifier=args.model,
         evaluation_path=eval_path,
         dataset_path=args.dataset_file,
