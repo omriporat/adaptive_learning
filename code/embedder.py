@@ -194,26 +194,42 @@ def epinnet_finalize_function(aggregated_evaluated_data, dataset):
         #"top_K_df": top_K_df,
     }
 
-@torch.no_grad
+@torch.no_grad()
 def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu"), **kwargs):
     margin = 1
-    pos_to_use = kwargs["pos_to_use"]
+    
     x = data[0].to(device)
     y = data[1].to(device)
 
-    
     calc_triplets = "triplet_loss" in kwargs
-    
+
     if calc_triplets:
         triplet_loss = torch.nn.TripletMarginLoss(margin=margin, eps=1e-7)
 
     hh = model(x)
 
-    if "flat_embeddings" in kwargs and kwargs["flat_embeddings"]:
-        emb = hh[:, torch.tensor(pos_to_use), :].flatten(start_dim=1)
+    
+    if "positions_to_embed" in kwargs and kwargs["positions_to_embed"] is not None:
+        pos_to_use = kwargs["positions_to_embed"]
     else:
-        emb = torch.nn.functional.normalize(hh[:, torch.tensor(pos_to_use), :], dim=1).mean(dim=1)
-        emb = torch.nn.functional.normalize(emb, dim=1)
+        pos_to_use = list(range(1, hh.shape[1] - 1)) # ignore first and last token [bos/eos]
+
+    if "normalize_embeddings" in kwargs:
+        normalize_embeddings = kwargs["normalize_embeddings"]
+    else:
+        normalize_embeddings = True
+
+    if normalize_embeddings:
+        print("[INFO]: Normalizing embeddings")
+        emb = torch.nn.functional.normalize(hh[:, torch.tensor(pos_to_use), :], dim=1)
+
+    if "average_embeddings" in kwargs and kwargs["average_embeddings"]:
+        print("[INFO]: Averaging embeddings")
+        emb.mean(dim=1)
+
+        if normalize_embeddings:
+            print("[INFO]: Normalizing averaged embeddings")
+            emb = torch.nn.functional.normalize(emb, dim=1)
 
     if calc_triplets and "trip_loss" not in agg_dict.keys():
         agg_dict['trip_loss'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
@@ -221,8 +237,8 @@ def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu
     if "embeddings" not in agg_dict.keys():
         agg_dict['embeddings'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
 
-    if "ground_truth" not in agg_dict.keys():
-        agg_dict['ground_truth'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
+    if "y_value" not in agg_dict.keys():
+        agg_dict['y_value'] = torch.tensor([], dtype=torch.float, device=torch.device("cpu"))
 
 
     if calc_triplets:
@@ -233,7 +249,7 @@ def embeddings_evaluate_function(model, data, agg_dict, device=torch.device("cpu
             agg_dict["trip_loss"] = torch.cat([agg_dict['trip_loss'], trip_loss.detach().cpu().reshape(-1)], dim=0)
 
     agg_dict["embeddings"] = torch.cat([agg_dict['embeddings'], emb.detach().cpu()], dim=0)
-    agg_dict["ground_truth"] = torch.cat([agg_dict["ground_truth"], y.detach().cpu().reshape(-1)], dim=0)
+    agg_dict["y_value"] = torch.cat([agg_dict["y_value"], y.detach().cpu().reshape(-1)], dim=0)
 
     torch.cuda.empty_cache() 
     

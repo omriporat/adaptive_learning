@@ -438,16 +438,16 @@ class plmEmbeddingModel(torch.nn.Module):
     def _logits_only_forward(self, x, **kwargs):
         if "attention_mask" in kwargs:
             attention_mask = kwargs["attention_mask"]
+            return self.forward_func(x, attention_mask=attention_mask)[0]
         else:
-            attention_mask = None
-        return self.forward_func(x, attention_mask=attention_mask)[0]
+            return self.forward_func(x)[0]
 
     def _emb_only_forward(self, x, **kwargs):
         if "attention_mask" in kwargs:
             attention_mask = kwargs["attention_mask"]
+            return self.forward_func(x, attention_mask=attention_mask)[1]
         else:
-            attention_mask = None
-        return self.forward_func(x, attention_mask=attention_mask)[1]
+            return self.forward_func(x)[1]
     
     def forward(self, x, **kwargs):
         return self.final_forward(x, **kwargs)
