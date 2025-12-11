@@ -78,6 +78,9 @@ def run_dataset(model, model_name, dataset_path, evaluation_path, sequence_colum
         indices = None
         eval_path = evaluation_path
     
+
+    label_column_name = kwargs.get("label_column_name", None)
+
     print(f"\t\t[INFO] Evaluation path: {eval_path}")
     train_test_dataset = PREActivityDataset(
         encoding_identifier=model_name,
@@ -89,7 +92,7 @@ def run_dataset(model, model_name, dataset_path, evaluation_path, sequence_colum
         cache=True,
         lazy_load=True,
         sequence_column_name=sequence_column_name,
-        label_column_name=None,
+        label_column_name=label_column_name,
         labels_dtype=torch.float32,
         device=device
     )
@@ -172,7 +175,7 @@ def worker(args):
     os.makedirs(evaluations_dir, exist_ok=True)
 
     embedding_options = {}
-    for arg in ["average_embeddings", "positions_to_embed", "antibodies"]:
+    for arg in ["average_embeddings", "positions_to_embed", "antibodies", "label_column_name"]:
         if hasattr(job_args, arg) and getattr(job_args, arg) is not None:
             embedding_options[arg] = getattr(job_args, arg)
 
