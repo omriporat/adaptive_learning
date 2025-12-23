@@ -27,7 +27,7 @@ def run_lsf_job(python_run_command, local_script_dir, code_execution_dir, conda_
     os.makedirs(local_script_dir, exist_ok=True)
     job_id = f"worker_{random.randint(10000000, 99999999)}"
     bash_script_path = os.path.join(local_script_dir, f"job_{job_id}.sh")
-    output_dir = os.path.join(os.path.dirname(local_script_dir), "job_outputs")
+    output_dir = os.path.join((local_script_dir), "job_outputs")
     os.makedirs(output_dir, exist_ok=True)
     err_file = os.path.join(output_dir, f"err_file_{job_id}")
     out_file = os.path.join(output_dir, f"out_file_{job_id}")
