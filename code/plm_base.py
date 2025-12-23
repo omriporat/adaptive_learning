@@ -14,25 +14,22 @@ Created on Tue Jun 24 13:26:20 2025
 @author: itayta
 """
 
+import os
+import sys
+from collections import OrderedDict
+from math import ceil
+from random import sample
 
-import sys, os
-import torch
-import torch.nn.functional as F
 import loralib as lora
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
-
+import torch
+import torch.nn.functional as F
+from consts import MODELS_PATH, WEIGHTS_PATH
 from esm_smart_dataset import *
 from sequence_space_utils import *
-
-from random import sample
-from math import ceil
-from collections import OrderedDict
-
 from transformers import BertModel, BertTokenizer
-
 
 global is_init
 is_init = False
@@ -80,8 +77,6 @@ class PlmWrapper():
 
 def plm_init(PLM_BASE_PATH):
     #PLM_BASE_PATH = "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
-    MODELS_PATH = "%s/models/" % PLM_BASE_PATH
-    WEIGHTS_PATH = "/%s/weights/" % MODELS_PATH
         
     MODEL_WEIGHTS_FILE_NAME = "esm3/esm_model_weights.pth"
     LORA_WEIGHTS_FIlE_NAME =  "esm3/esm_lora_weights.pth"
@@ -108,8 +103,9 @@ def plm_init(PLM_BASE_PATH):
     
     fix_esm_path()
     
-    import esm2
     import string
+
+    import esm2
     
     global is_init
     is_init = True

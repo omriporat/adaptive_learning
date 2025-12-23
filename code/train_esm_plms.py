@@ -1,41 +1,32 @@
 # -*- coding: utf-8 -*-
 
-import sys, os
-import torch
-import torch.nn.functional as F
+import argparse
+import os
+import sys
+import warnings
+from math import ceil
+from random import sample
+
+import einops
 import loralib as lora
-import scipy.stats
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy.stats
 import seaborn as sns
-import einops
+import torch
+import torch.nn.functional as F
 import yaml
-import argparse
-
-
+from Bio import SeqIO, pairwise2
+from Bio.Align import substitution_matrices
+from Bio.Seq import Seq
 from esm_smart_dataset import *
 from sequence_space_utils import *
 
-from Bio import pairwise2
-from Bio.Seq import Seq
-from Bio.Align import substitution_matrices
-from Bio import SeqIO
-
-from random import sample
-from math import ceil
-
-import warnings
 warnings.filterwarnings("ignore", module="torch")
 
+from consts import MODELS_PATH, RESULTS_PATH, ROOT_PATH, WEIGHTS_PATH, MSA_PATH
+
 blosum62 = substitution_matrices.load("BLOSUM62")
-
-
-ROOT_PATH = "/Users/itayta/Desktop/prot_stuff/fitness_lndscp/fitness_learning"
-RESULTS_PATH = "%s/results" % ROOT_PATH
-MODELS_PATH = "%s/models/" % ROOT_PATH
-WEIGHTS_PATH = "/%s/weights/" % MODELS_PATH
-
-MSA_PATH = "%s/data/datasets/msa/" % ROOT_PATH
 
 STOCK_MSAS = ["1a3a_1_A.a3m", 
               "5ahw_1_A.a3m", 
@@ -71,9 +62,9 @@ def fix_esm_path():
 
 fix_esm_path()
 
-import esm2
 import string
 
+import esm2
 
 deletekeys = dict.fromkeys(string.ascii_lowercase)
 deletekeys["."] = None

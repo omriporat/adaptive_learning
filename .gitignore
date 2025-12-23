@@ -10,4 +10,6 @@ executions/
 rosetta/
 data/
 results/
+job_logs/
+pretraining/
 *.pth
