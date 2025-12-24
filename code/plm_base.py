@@ -18,11 +18,6 @@ Created on Tue Jun 24 13:26:20 2025
 import sys, os
 import torch
 import torch.nn.functional as F
-import loralib as lora
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
-
 
 from utils import *
 
@@ -30,7 +25,7 @@ from random import sample
 from math import ceil
 from collections import OrderedDict
 from transformers import BertModel, BertTokenizer
-
+from tokenizers import Tokenizer
 
 global is_init
 
@@ -47,6 +42,7 @@ class PlmWrapper():
                  get_embeddings_func=None,
                  get_n_layers_func=None,
                  get_token_vocab_dim_func=None,
+                 encode_func=None,
                  forward_func=None):
         
             self.get_model_func = get_model_func if get_model_func is not None else self.unimplemented
@@ -54,6 +50,7 @@ class PlmWrapper():
             self.get_n_layers_func = get_n_layers_func if get_n_layers_func is not None else self.unimplemented
             self.get_tokenizer_func = get_tokenizer_func if get_tokenizer_func is not None else self.unimplemented
             self.get_token_vocab_dim_func = get_token_vocab_dim_func if get_token_vocab_dim_func is not None else self.unimplemented
+            self.encode_func = encode_func if encode_func is not None else self.unimplemented
             self.forward_func = forward_func if forward_func is not None else self.unimplemented
             
             
@@ -72,6 +69,9 @@ class PlmWrapper():
     
     def get_token_vocab_dim(self):
         return self.get_token_vocab_dim_func()
+
+    def get_encode(self):
+        return self.encode_func
     
     def get_forward(self):
         return self.forward_func
@@ -108,7 +108,9 @@ def plm_init(PLM_BASE_PATH):
     fix_esm_path()
     
     import esm2
-    import string
+    from progen.modeling_progen import ProGenForCausalLM
+    from progen.configuration_progen import ProGenConfig
+    
     
     global is_init
     is_init = True
@@ -155,6 +157,11 @@ def plm_init(PLM_BASE_PATH):
             V, abland_d_model = model.embeddings.word_embeddings.weight.size()
             all_toks = tokenizer.vocab
             return all_toks, abland_d_model
+
+        def encode_func(seq):
+            seq = " ".join([aa for aa in seq])
+            final_seq = seq.replace("-", "[PAD]")
+            return tokenizer.encode(final_seq)
         
         def forward_func(x, attention_mask=None):
             # You can add an attention mask, but in our case we don't need it
@@ -171,6 +178,7 @@ def plm_init(PLM_BASE_PATH):
                           get_embeddings,
                           get_n_layers,        
                           get_token_vocab_dim,
+                          encode_func,
                           forward_func)
 
 
@@ -237,6 +245,10 @@ def plm_init(PLM_BASE_PATH):
             V, plm_d_model = model.embed_tokens.weight.size()
             all_toks = tokenizer.all_toks
             return all_toks, plm_d_model
+
+        def encode_func(seq):
+            seq = "<cls>" + seq + "<eos>"
+            return tokenizer.encode(seq)
         
         def forward_func(x):
             forward = model.forward(x, repr_layers=[model.num_layers])
@@ -249,6 +261,59 @@ def plm_init(PLM_BASE_PATH):
                           get_embeddings,
                           get_n_layers,        
                           get_token_vocab_dim,
+                          encode_func,
+                          forward_func)
+    
+    supported_progen_models = ["progen2-small"]
+
+    def load_progen_model_and_alphabet(model_name):            
+        if model_name not in supported_progen_models:
+            raise BaseException("Unsupported model %s, model must be in: %s" %\
+                                  (model_name, ", ".join(supported_progen_models)))
+            
+        weights_path = "%s/progen/%s_weights.pth" % (WEIGHTS_PATH, model_name)
+        config_path = "%s/progen/%s_config.json" % (WEIGHTS_PATH, model_name)
+        tokenizer_config_path = "%s/progen/%s_tokenizer.json" % (WEIGHTS_PATH, model_name)
+        
+        config = ProGenConfig.from_pretrained(config_path)
+        model = ProGenForCausalLM(config)
+        model.load_state_dict(torch.load(weights_path))
+        model.eval()
+        
+        with open(tokenizer_config_path, 'r') as f:
+            tokenizer = Tokenizer.from_str(f.read())
+                    
+        def get_progen_model():
+            return model
+        
+        def get_progen_tokenizer():
+            return tokenizer
+        
+        def get_embeddings():
+            return model.transformer.wte
+        
+        def get_n_layers():
+            return config.n_layer
+            
+        def get_token_vocab_dim():            
+            return tokenizer.get_vocab(), config.n_embd
+           
+        def encode_func(seq):         
+            final_seq = "<|bos|>" + seq + "<|eos|>"   
+            return tokenizer.encode(final_seq).ids
+        
+        def forward_func(x):
+            forward = model(x, output_hidden_states=True)
+            hh = forward.hidden_states[-1]
+            logits = forward.logits
+            return(logits, hh)                                
+                    
+        return PlmWrapper(get_progen_model,
+                          get_progen_tokenizer,
+                          get_embeddings,
+                          get_n_layers,        
+                          get_token_vocab_dim,
+                          encode_func,
                           forward_func)
     
 
@@ -258,6 +323,9 @@ def plm_init(PLM_BASE_PATH):
 
         if model_name in supported_ablang_models:
             return load_ablang_model_and_alphabet(model_name)
+
+        if model_name in supported_progen_models:
+            return load_progen_model_and_alphabet(model_name)
         
     internal_wrapper["load_model"] = load_model_internal
         
@@ -303,6 +371,7 @@ class plmTrunkModel(torch.nn.Module):
         self.plm = plm.to(device)
         self.last_layer = plm_obj.get_n_layers()
         self.forward_func = plm_obj.get_forward()
+        self.internal_encode = plm_obj.get_encode()
         self.specific_pos = specific_pos
         self.vocab = vocab
         
@@ -422,6 +491,7 @@ class plmEmbeddingModel(torch.nn.Module):
         self.plm = plm.to(device)
         self.last_layer = plm_obj.get_n_layers()
         self.forward_func = plm_obj.get_forward()
+        self.internal_encode = plm_obj.get_encode()
         self.vocab = vocab
         
         if emb_only:
@@ -430,9 +500,11 @@ class plmEmbeddingModel(torch.nn.Module):
             self.final_forward = self._logits_only_forward
 
     def encode(self, seq):
-        enc_seq = ""
-        enc_seq = enc_seq + "<cls>" + seq + "<eos>"
-        return self.tokenizer.encode(enc_seq)
+        # enc_seq = ""
+        # enc_seq = enc_seq + "<cls>" + seq + "<eos>"
+        # return self.tokenizer.encode(enc_seq)
+        return self.internal_encode(seq)
+
 
 
     def _logits_only_forward(self, x, **kwargs):
@@ -476,8 +548,6 @@ class abPlmEmbeddingModel(plmEmbeddingModel):
         l_seq = " ".join([aa for aa in l_seq])
         final_seq = (h_seq + " [SEP] " + l_seq).replace("-", "[PAD]")
         return self.tokenizer.encode(final_seq)
-
-
 
 class EpiNNet(torch.nn.Module):
     def __init__(self, 
