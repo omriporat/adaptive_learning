@@ -25,6 +25,7 @@ from random import sample
 from math import ceil
 from collections import OrderedDict
 from transformers import BertModel, BertTokenizer
+from transformers import AutoTokenizer, AutoModel
 from tokenizers import Tokenizer
 
 global is_init
@@ -111,11 +112,19 @@ def plm_init(PLM_BASE_PATH):
     from progen.modeling_progen import ProGenForCausalLM
     from progen.configuration_progen import ProGenConfig
     
-    
     global is_init
     is_init = True
     
     supported_ablang_models = ["igbert"]
+    supported_esm2_models = ["esm1_t34_670M_UR50S", "esm1_t34_670M_UR50D", "esm1_t34_670M_UR100",
+                             "esm1_t12_85M_UR50S", "esm1_t6_43M_UR50S", "esm1b_t33_650M_UR50S",
+                             "esm_msa1_t12_100M_UR50S","esm_msa1b_t12_100M_UR50S","esm1v_t33_650M_UR90S_1",
+                             "esm1v_t33_650M_UR90S_2", "esm1v_t33_650M_UR90S_3", "esm1v_t33_650M_UR90S_4",
+                             "esm1v_t33_650M_UR90S_5", "esm_if1_gvp4_t16_142M_UR50","esm2_t6_8M_UR50D",
+                             "esm2_t12_35M_UR50D", "esm2_t30_150M_UR50D", "esm2_t33_650M_UR50D",
+                             "esm2_t36_3B_UR50D", "esm2_t48_15B_UR50D"]
+    supported_progen_models = ["progen2-small"]
+    supported_transformers_pretrained_models = ["Rostlab/prot_bert", "ElnaggarLab/ankh3-large"]          
 
     def load_ablang_model_and_alphabet(model_name):
         if model_name not in supported_ablang_models:
@@ -180,30 +189,7 @@ def plm_init(PLM_BASE_PATH):
                           get_token_vocab_dim,
                           encode_func,
                           forward_func)
-
-
-    supported_esm2_models =\
-            ["esm1_t34_670M_UR50S",
-             "esm1_t34_670M_UR50D",
-             "esm1_t34_670M_UR100",
-             "esm1_t12_85M_UR50S",
-             "esm1_t6_43M_UR50S",
-             "esm1b_t33_650M_UR50S",
-             "esm_msa1_t12_100M_UR50S",
-             "esm_msa1b_t12_100M_UR50S",        
-             "esm1v_t33_650M_UR90S_1",
-             "esm1v_t33_650M_UR90S_2",
-             "esm1v_t33_650M_UR90S_3",
-             "esm1v_t33_650M_UR90S_4",
-             "esm1v_t33_650M_UR90S_5",
-             "esm_if1_gvp4_t16_142M_UR50",
-             "esm2_t6_8M_UR50D",
-             "esm2_t12_35M_UR50D",
-             "esm2_t30_150M_UR50D",
-             "esm2_t33_650M_UR50D",
-             "esm2_t36_3B_UR50D",
-             "esm2_t48_15B_UR50D"]
-            
+               
     def load_esm2_model_and_alphabet(model_name):            
         if model_name not in supported_esm2_models:
             raise BaseException("Unsupported model %s, model must be in: %s" %\
@@ -263,10 +249,9 @@ def plm_init(PLM_BASE_PATH):
                           get_token_vocab_dim,
                           encode_func,
                           forward_func)
-    
-    supported_progen_models = ["progen2-small"]
 
-    def load_progen_model_and_alphabet(model_name):            
+    def load_progen_model_and_alphabet(model_name):   
+
         if model_name not in supported_progen_models:
             raise BaseException("Unsupported model %s, model must be in: %s" %\
                                   (model_name, ", ".join(supported_progen_models)))
@@ -316,6 +301,67 @@ def plm_init(PLM_BASE_PATH):
                           encode_func,
                           forward_func)
     
+    # TODO: merge with ablang
+    def load_transformers_pretrained_model_and_alphabet(model_name):
+
+        if model_name not in supported_transformers_pretrained_models:
+            raise BaseException("Unsupported model %s, model must be in: %s" %\
+                                  (model_name, ", ".join(supported_transformers_pretrained_models)))        
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=False)
+        model = AutoModel.from_pretrained(model_name, token=False)
+
+        def get_encoder(model_name, model):
+            if model_name == "Rostlab/prot_bert":
+                return (model, model.embeddings.word_embeddings, model.encoder.layer, True)
+            elif model_name == "ElnaggarLab/ankh3-large":
+                return (model.encoder, model.encoder.embed_tokens, model.encoder.block, False)
+            else:
+                raise BaseException("Unsupported model %s, model must be in: %s" %\
+                                  (model_name, ", ".join(supported_transformers_pretrained_models)))
+        
+        encoder, embeddings, layers, add_space_to_seq = get_encoder(model_name, model)
+        N_layers = len(layers)
+
+        def get_transformer_encoder_model():
+            return encoder
+        
+        def get_transformer_encoder_tokenizer():
+            return tokenizer
+        
+        def get_embeddings():
+            return embeddings
+        
+        def get_n_layers():
+            return N_layers
+            
+        def get_token_vocab_dim():            
+            return tokenizer.get_vocab(), embeddings.weight.shape[1]
+           
+        def encode_func(seq): 
+            if add_space_to_seq:
+                seq = " ".join([aa for aa in seq])     
+
+            return tokenizer(seq)["input_ids"]
+        
+        def forward_func(x):
+            if x.dim() == 1:
+                x = x.unsqueeze(0)
+
+            attention_mask = torch.ones(x.shape)
+            forward = encoder(input_ids=x, attention_mask=attention_mask)
+            hh = forward.last_hidden_state
+
+            return(None, hh)                                
+                    
+        return PlmWrapper(get_transformer_encoder_model,
+                          get_transformer_encoder_tokenizer,
+                          get_embeddings,
+                          get_n_layers,        
+                          get_token_vocab_dim,
+                          encode_func,
+                          forward_func)
+            
 
     def load_model_internal(model_name):
         if model_name in supported_esm2_models:
@@ -326,6 +372,9 @@ def plm_init(PLM_BASE_PATH):
 
         if model_name in supported_progen_models:
             return load_progen_model_and_alphabet(model_name)
+
+        if model_name in supported_transformers_pretrained_models:
+            return load_transformers_pretrained_model_and_alphabet(model_name)
         
     internal_wrapper["load_model"] = load_model_internal
         
