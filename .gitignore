@@ -13,3 +13,5 @@ results/
 job_logs/
 pretraining/
 *.pth
+*.pt
+*.csv

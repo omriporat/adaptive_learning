@@ -14,10 +14,10 @@ import time
 import string
 
 
-from Bio import pairwise2
-from Bio.Seq import Seq
-from Bio.Align import substitution_matrices
-from Bio import SeqIO
+# from Bio import pairwise2
+# from Bio.Seq import Seq
+# from Bio.Align import substitution_matrices
+# from Bio import SeqIO
 
 
 def fitness_from_prob(pssm, wt_tensor, variant_tensor):    
@@ -255,3 +255,23 @@ def generate_msa_df_from_aligned_msa(aligned_msa_path):
     return msa_df
     
 
+def pairwise_cosine(X):
+    X = F.normalize(X, dim=-1)
+    similarity = torch.matmul(X, X.t())     # [N, N]
+    distance = 1 - similarity
+    return distance
+
+def online_mine_triplets(labels):
+    
+    triplets = []
+    
+    for i, anchor_label in enumerate(labels):        
+        positive_indices = (labels == anchor_label).nonzero(as_tuple=True)[0]
+        negative_indices = (labels != anchor_label).nonzero(as_tuple=True)[0]
+
+        for pos_idx in positive_indices:
+            if pos_idx == i: continue
+            for neg_idx in negative_indices:
+                triplets.append((i, pos_idx.item(), neg_idx.item()))
+                
+    return triplets

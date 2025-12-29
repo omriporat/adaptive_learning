@@ -38,8 +38,8 @@ def parse_args(args=None):
     return args
 
 
-def load_config(args: list = None, create_dirs: bool = True) -> dict:
-    with open(CONFIG_PATH, "r") as f:
+def load_config(config_path: str = CONFIG_PATH, args: list = None, create_dirs: bool = True) -> dict:
+    with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
     if args is not None and len(args) > 0:

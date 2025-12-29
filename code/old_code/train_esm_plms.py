@@ -171,7 +171,7 @@ def validate_args(\
                     full_mask_pos_func=get_mutated_position_function_gfp,
                     partial_mask_pos_func=get_mutated_position_function_gfp_n2,
                     num_muts_column_name="num_muts",
-                    activity_column_name='inactive',
+                    label_column_name='inactive',
                     sequence_column_name="full_seq",
                     verbose=True):
     
@@ -307,7 +307,7 @@ def validate_args(\
     dataset_class_kwargs["ref_seq"] = ref_seq
     dataset_class_kwargs["model_name"] = model_name
     dataset_class_kwargs["sequence_column_name"] = sequence_column_name
-    dataset_class_kwargs["activity_column_name"] = activity_column_name
+    dataset_class_kwargs["label_column_name"] = label_column_name
     dataset_class_kwargs["mini_batch_size"] = batch_size
     dataset_class_kwargs["cache"] = True
     dataset_class_kwargs["labels_dtype"] = torch.int64
@@ -339,7 +339,7 @@ def train_esm_model(dataset_path=None,
                     full_mask_pos_func=get_mutated_position_function_gfp,
                     partial_mask_pos_func=get_mutated_position_function_gfp_n2,
                     num_muts_column_name="num_muts",
-                    activity_column_name='inactive',
+                    label_column_name='inactive',
                     sequence_column_name="full_seq",
                     verbose=True):       
     
@@ -366,7 +366,7 @@ def train_esm_model(dataset_path=None,
                             full_mask_pos_func=full_mask_pos_func,
                             partial_mask_pos_func=partial_mask_pos_func,
                             num_muts_column_name=num_muts_column_name,
-                            activity_column_name=activity_column_name,
+                            label_column_name=label_column_name,
                             sequence_column_name=sequence_column_name,
                             verbose=verbose)
     
@@ -921,7 +921,7 @@ def evaluate(dataset_path=None,
                     full_mask_pos_func=get_mutated_position_function_gfp,
                     partial_mask_pos_func=get_mutated_position_function_gfp_n2,
                     num_muts_column_name="num_muts",
-                    activity_column_name='inactive',
+                    label_column_name='inactive',
                     sequence_column_name="full_seq",
                     verbose=True):       
     
@@ -947,8 +947,8 @@ def evaluate(dataset_path=None,
                             full_mask_pos_func=full_mask_pos_func,
                             partial_mask_pos_func=partial_mask_pos_func,
                             num_muts_column_name=num_muts_column_name,
-                            activity_column_name=activity_column_name,
-                            sequence_column_name=activity_column_name,
+                            label_column_name=label_column_name,
+                            sequence_column_name=label_column_name,
                             verbose=verbose)
               
     eval_path = "%s/%s" % (save_path, project_name)

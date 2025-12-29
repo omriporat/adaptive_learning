@@ -6,6 +6,7 @@ import umap
 from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import pairwise_distances
 from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import dendrogram, linkage
 
 from config import load_config
 
@@ -14,28 +15,33 @@ def plot_embeddings(
     embeddings,
     save_dir: str,
     opmode: str,
-    positive_indices=None,
-    negative_indices=None,
+    enzyme: str,
+    substrate: str,
+    positive_threshold: float = 15,
+    negative_threshold: float = 0.5,
     cluster_labels=None,
-    activity=None,
+    fold_improvements=None,
     finetune_tag: str = "naive",
 ):
     "Create a UMAP plot of the embeddings"
     reducer = umap.UMAP()
     reduced_embeddings = reducer.fit_transform(embeddings)
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(8, 8))
     # create scatter plot with binary color map and a legend
     plt.scatter(
         reduced_embeddings[:, 0],
         reduced_embeddings[:, 1],
-        c=cluster_labels if cluster_labels is not None else activity,
+        c=cluster_labels if cluster_labels is not None else fold_improvements,
         cmap="Spectral",
         s=5,
     )
 
     # if positive_indices is not None and negative_indices is not None
     # plot using the cluster colormap, but change shapes of designed points
-    if positive_indices is not None and negative_indices is not None:
+    positive_indices = fold_improvements.index[fold_improvements >= positive_threshold].tolist() if fold_improvements is not None else None
+    negative_indices = fold_improvements.index[fold_improvements < negative_threshold].tolist() if fold_improvements is not None else None
+    neutral_indices = fold_improvements.index[(fold_improvements >= negative_threshold) & (fold_improvements < positive_threshold)].tolist() if fold_improvements is not None else None
+    if fold_improvements is not None:
         plt.scatter(
             reduced_embeddings[negative_indices, 0],
             reduced_embeddings[negative_indices, 1],
@@ -43,7 +49,7 @@ def plot_embeddings(
             edgecolor="black",
             marker="X",
             s=50,
-            label="Negative Design",
+            label=f"Negative Design (< {negative_threshold})",
         )
         plt.scatter(
             reduced_embeddings[positive_indices, 0],
@@ -52,11 +58,20 @@ def plot_embeddings(
             edgecolor="red",
             marker="^",
             s=50,
-            label="Positive Design",
+            label=f"Positive Design (>= {positive_threshold})",
+        )
+        plt.scatter(
+            reduced_embeddings[neutral_indices, 0],
+            reduced_embeddings[neutral_indices, 1],
+            c="none",
+            edgecolor="gray",
+            marker="o",
+            s=50,
+            label="Neutral Design (between)",
         )
         plt.legend()
 
-    plt.title("UMAP projection of the embeddings")
+    plt.title(f"UMAP projection\n{enzyme} - {substrate}\nMode: {opmode}, {finetune_tag}")
     plt.savefig(f"{save_dir}/umap_projection_{opmode}_{finetune_tag}.png")
 
 
@@ -196,19 +211,39 @@ def plot_cluster_coverage(
     plt.savefig(f"{save_path}/cluster_coverage_{opmode}_{finetune_tag}_{clustering_type}.png")
 
 
+def plot_sequence_clusters_dendrogram(
+    sequences,
+    n_clusters: int,
+    enzyme: str,
+    substrate: str,
+    save_path: str,
+):
+    "Plot dendrogram of sequence clusters"
+
+    # convert sequences to numpy array of shape (n_sequences, n_pos)
+    sequences = np.array([list(seq) for seq in sequences])
+    distance_matrix = pairwise_distances(
+        sequences, metric=lambda x, y: sum(c1 != c2 for c1, c2 in zip(x, y))
+    )
+    condensed_distance = squareform(distance_matrix)
+    linked = linkage(condensed_distance, method="average")
+
+    plt.figure(figsize=(10, 7))
+    dendrogram(linked, orientation="top", distance_sort="descending", show_leaf_counts=True)
+    plt.title(f"Dendrogram of Sequence Clusters: {enzyme} - {substrate}")
+    plt.savefig(f"{save_path}/sequence_clusters_dendrogram.png")
+
+
 def main():
     n_clusters = 15
     config = load_config()
     embeddings = np.load(config["embeddings_path"])
-    positive_indices, negative_indices = get_designed_indices(
-        dataset_path=config["substrate_specific_dataset_path"], threshold=10
-    )
     cluster_labels, representative_indices = cluster_embeddings(
         embeddings,
         n_clusters=n_clusters,
         save_path=config["embeddings_clusters_path"],
     )
-    sequences_df = pd.read_csv(config["dataset_path"])
+    sequences_df = pd.read_csv(config["substrate_specific_dataset_path"])
     # use only the specific positions
     sequences = sequences_df["full_seq"]
     sequences = sequences.apply(
@@ -216,15 +251,15 @@ def main():
     )
 
 
-    plot_cluster_coverage(
-        cluster_labels,
-        positive_indices,
-        negative_indices,
-        save_path=config["results_path"],
-        clustering_type="kmeans_embedding",
-        opmode=config["opmode"],
-        finetune_tag=config["finetune_tag"],
-    )
+    # plot_cluster_coverage(
+    #     cluster_labels,
+    #     positive_indices,
+    #     negative_indices,
+    #     save_path=config["results_path"],
+    #     clustering_type="kmeans_embedding",
+    #     opmode=config["opmode"],
+    #     finetune_tag=config["finetune_tag"],
+    # )
     # sequence_cluster_labels, seq_representative_indices = cluster_sequences(
     #     sequences.values, n_clusters=n_clusters, save_path=config["sequence_clusters_path"]
     # )
@@ -238,24 +273,34 @@ def main():
     #     opmode=config["opmode"],
     #     finetune_tag=config["finetune_tag"],
     # )
-    return
 
-    plot_logos(
-        sequences,
-        results_dir=config["results_path"],
-        cluster_labels=cluster_labels,
-        finetune_tag=config["finetune_tag"],
-        opmode=config["opmode"],
-    )
+    # plot_logos(
+    #     sequences,
+    #     results_dir=config["results_path"],
+    #     cluster_labels=cluster_labels,
+    #     finetune_tag=config["finetune_tag"],
+    #     opmode=config["opmode"],
+    # )
+
+    # plot_sequence_clusters_dendrogram(
+    #     sequences,
+    #     n_clusters=n_clusters,
+    #     enzyme=config["enzyme"],
+    #     substrate=config["substrate"],
+    #     save_path=config["substrate_specific_results_path"],
+    # )
+
+    fold_improvements = sequences_df[sequences_df["design"] != -1]["fold_improvement"]
 
     plot_embeddings(
         embeddings,
-        positive_indices=positive_indices,
-        negative_indices=negative_indices,
-        save_dir=config["results_path"],
+        enzyme=config["enzyme"],
+        substrate=config["substrate"],
+        save_dir=config["substrate_specific_results_path"],
         cluster_labels=cluster_labels,
         finetune_tag=config["finetune_tag"],
         opmode=config.get("opmode", "mean"),
+        fold_improvements=fold_improvements,
     )
 
 

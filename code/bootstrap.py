@@ -26,8 +26,12 @@ def get_oh_table(dataset_path: str, first_col: str, last_col: str) -> pd.DataFra
         experimental_results_df["design"] != -1
     ]
     cols = []
+    should_append = False
     for col in experimental_results_df.columns:
-        cols.append(col)
+        if col == first_col:
+            should_append = True
+        if should_append:
+            cols.append(col)
         if col == last_col:
             break
     funclib_df = experimental_results_df[cols]

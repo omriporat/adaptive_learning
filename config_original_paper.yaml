@@ -4,14 +4,14 @@ pretraining_dir_name: "pretraining"
 bootstrap_dir_name: "bootstrap"
 results_dir_name: "results"
 enzyme: "PTE"
-substrate: "p-nitrophenyl_acetate"
+substrate: "malathion"
 
 dataset_filename: "llm_input_original_paper.csv"
 tag: "clustering_funclib_paper"
 weights_filename: "final_model.pt"
 
 model_type: "plm"
-finetune: True
+finetune: False
 opmode: "mean"
 train_type: "msa_backbone"
 
