@@ -1,8 +1,9 @@
-import yaml
+import os
 import argparse
 
-
-from trainer import *
+from plm_base import plm_init
+from trainer import train_evaluate_msa_backbone, train_evaluate_plms, train_evaluate_epinnet
+from config import load_config
 
 # Example config.yaml:
 # ---
@@ -50,8 +51,7 @@ if __name__ == "__main__":
 
     #config_path = "msa_backbone_config.yaml"
     # Load configuration from YAML file
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
+    config = load_config(config_path)
 
     # Overwrite config values with any provided CLI args (if not None), dynamically
     for key, val in vars(args).items():
@@ -75,8 +75,8 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     if config["model_type"] == "plm":
         if config["train_type"] == "msa_backbone":
-            train_evaluate_msa_backbone()
+            train_evaluate_msa_backbone(config)
         else:
-            train_evaluate_plms()
+            train_evaluate_plms(config)
     elif config["model_type"] == "epinnet":
-        train_evaluate_epinnet()
+        train_evaluate_epinnet(config)

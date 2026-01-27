@@ -21,8 +21,8 @@ class PREDataset(Dataset):
                  cache=True,
                  sequence_column_name='full_seq',                 
                  label_column_name='activity',
-                 pad_region_label=None,
-                 labels_dtype=torch.float64):
+                 labels_dtype=torch.float64,
+                 pad_region_label="pad_regions",):
             
             
         if not dataset_path.endswith(".csv"):
@@ -103,7 +103,7 @@ class PREDataset(Dataset):
 
         # pad region is a string thus cannot be saved as a tensor
         if self.pad_region is not None:
-            self.pad_region = self.pad_region[indices_tensor.to_numpy().astype(int)]
+            self.pad_region = self.pad_region[indices_tensor]
         
         self.size = self.labels.shape[0]
 
@@ -128,6 +128,7 @@ class PREActivityDataset(Dataset):
                      external_encoding=None,
                      cache=True,
                      lazy_load=True,
+                     pad_region_label="pad_regions",
                      sequence_column_name='full_seq',
                      label_column_name='inactive',
                      ref_seq="",
@@ -178,7 +179,8 @@ class PREActivityDataset(Dataset):
                                    self.cache,
                                    self.sequence_column_name,
                                    self.label_column_name,
-                                   self.labels_dtype)
+                                   self.labels_dtype,
+                                   pad_region_label=pad_region_label)
                     
             self.size = len(self.train_dataset)
 

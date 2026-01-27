@@ -20,7 +20,7 @@ from scipy.stats import spearmanr
 from config import load_config
 
 
-def get_oh_table(dataset_path: str, first_col: str, last_col: str) -> pd.DataFrame:
+def get_oh_table(dataset_path: str, first_col: str, last_col: str, y_col: str) -> pd.DataFrame:
     experimental_results_df = pd.read_csv(dataset_path)
     experimental_results_df = experimental_results_df[
         experimental_results_df["design"] != -1
@@ -37,7 +37,7 @@ def get_oh_table(dataset_path: str, first_col: str, last_col: str) -> pd.DataFra
     funclib_df = experimental_results_df[cols]
     oh_funclib_df = pd.get_dummies(funclib_df)
 
-    activity = experimental_results_df["fold_improvement"]
+    activity = experimental_results_df[y_col]
     design_numbers = experimental_results_df["design"]
 
     return oh_funclib_df, activity, design_numbers
@@ -229,12 +229,12 @@ def bootstrap_regressor(
     oh_df,
     embeddings,
     y,
-    test_fraction: float = 0.7,
+    train_fraction: float = 0.2,
     n_iterations: int = 1000,
-    hidden_layer_size: int = 16,
+    hidden_layer_size: int = 128,
 ):
     np.random.seed(42)
-    n_train_samples = int(len(y) * (1 - test_fraction))
+    n_train_samples = int(len(y) * train_fraction)
 
     embeddings_r2_results = []
     embeddings_spearman_results = []
@@ -257,7 +257,7 @@ def bootstrap_regressor(
         y_test = y[test_indices_without]
         # fit the model
         mlp_reg_emb = MLPRegressor(
-            hidden_layer_sizes=(hidden_layer_size),
+            hidden_layer_sizes=(hidden_layer_size,),
             activation="relu",
             learning_rate="invscaling",
             solver="lbfgs",
@@ -266,7 +266,7 @@ def bootstrap_regressor(
             max_iter=20000,
         )
         mlp_reg_oh = MLPRegressor(
-            hidden_layer_sizes=(hidden_layer_size),
+            hidden_layer_sizes=(hidden_layer_size,),
             activation="relu",
             learning_rate="invscaling",
             solver="lbfgs",
@@ -284,7 +284,7 @@ def bootstrap_regressor(
             print(f"Indices used for testing: {test_indices_without}")
             print("retraining with decreased initial learning rate")
             mlp_reg_emb = MLPRegressor(
-                hidden_layer_sizes=(hidden_layer_size),
+                hidden_layer_sizes=(hidden_layer_size,),
                 activation="relu",
                 learning_rate="invscaling",
                 solver="lbfgs",
@@ -336,6 +336,7 @@ def boxplot_regressor_results(
     finetune_tag: str,
     mode: str,
     test_frac: float,
+    log_tag: str,
     results_path: str,
 ):
     plt.figure(figsize=(8, 6))
@@ -347,13 +348,13 @@ def boxplot_regressor_results(
     )
     sns.boxplot(x="Method", y=corr_type, data=plot_df, palette=["blue", "orange"])
     plt.title(
-        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - Test Fraction: {test_frac}"
+        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - Test Fraction: {test_frac}"
     )
     plt.ylabel(corr_type)
     plt.xlabel("Method")
     print(f"Saving regressor bootstrap plot in {results_path}")
     plt.savefig(
-        f"{results_path}/regressor_bootstrap_{finetune_tag}_{mode}_{test_frac}_{corr_type}.png"
+        f"{results_path}/regressor_bootstrap_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{corr_type}.png"
     )
     plt.close()
 
@@ -367,6 +368,7 @@ def scatter_regressor_results(
     finetune_tag: str,
     mode: str,
     test_frac: float,
+    log_tag: str,
     results_path: str,
 ):
     # like a boxplot, but connect paired points with lines
@@ -383,39 +385,47 @@ def scatter_regressor_results(
             color=color,
         )
     plt.title(
-        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - Test Fraction: {test_frac}"
+        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - Test Fraction: {test_frac}"
     )
     plt.ylabel(corr_type)
     plt.xlabel("Method")
     print(f"Saving regressor bootstrap scatter plot in {results_path}")
     plt.savefig(
-        f"{results_path}/regressor_bootstrap_scatter_{finetune_tag}_{mode}_{test_frac}_{corr_type}.png"
+        f"{results_path}/regressor_bootstrap_scatter_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{corr_type}.png"
     )
     plt.close()
 
 
 def main():
-    config = load_config(sys.argv[1:])
+    config = load_config(sys.argv[1], sys.argv[2:])
     embeddings = np.load(config["embeddings_path"], allow_pickle=True)
     oh_funclib_df, y, design_numbers = get_oh_table(
         config["substrate_specific_dataset_path"],
         first_col=config["first_column_name"],
         last_col=config["last_column_name"],
+        y_col=config["continuous_activity_column"],
     )
 
-    y = np.log(y + 1e-6)
+    if config["log_for_bootstrap"]:
+        y = np.log(y + 1e-6)
 
+    train_fraction = config["train_fraction"]
+    print(f"Bootstrapping regressor with train fraction {train_fraction}")
+    if config["log_for_bootstrap"]:
+        result_tag = f"{train_fraction}_{config['finetune_tag']}_{config['opmode']}_log"
+    else:
+        result_tag = f"{train_fraction}_{config['finetune_tag']}_{config['opmode']}_no_log"
     results_df = bootstrap_regressor(
         oh_funclib_df,
         embeddings,
         y,
         hidden_layer_size=config["bootstrap_hidden_layer_size"],
         n_iterations=config["n_bootstrap"],
-        test_fraction=config["test_fraction"],
+        train_fraction=train_fraction,
     )
 
     results_df.to_csv(
-        f"{config['substrate_specific_results_path']}/regressor_bootstrap_results_{config['test_fraction']}.csv",
+        f"{config['substrate_specific_results_path']}/regressor_bootstrap_results_{result_tag}.csv",
         index=False,
     )
 
@@ -427,7 +437,8 @@ def main():
         corr_type="Spearman",
         finetune_tag=config["finetune_tag"],
         mode=config["opmode"],
-        test_frac=config["test_fraction"],
+        test_frac=train_fraction,
+        log_tag="log" if config["log_for_bootstrap"] else "no_log",
         results_path=config["substrate_specific_results_path"],
     )
     scatter_regressor_results(
@@ -438,7 +449,8 @@ def main():
         corr_type="Spearman",
         finetune_tag=config["finetune_tag"],
         mode=config["opmode"],
-        test_frac=config["test_fraction"],
+        test_frac=train_fraction,
+        log_tag="log" if config["log_for_bootstrap"] else "no_log",
         results_path=config["substrate_specific_results_path"],
     )
 

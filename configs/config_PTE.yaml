@@ -6,13 +6,13 @@ results_dir_name: "results"
 enzyme: "PTE"
 substrate: "malathion"
 
-dataset_filename: "llm_input_original_paper.csv"
-tag: "clustering_funclib_paper"
+dataset_filename: "adaptive_learning_stage_0.csv"
+tag: "zero_shot"
 weights_filename: "final_model.pt"
 
 model_type: "plm"
 finetune: False
-opmode: "mean"
+opmode: "flat"
 train_type: "msa_backbone"
 
 # Strings

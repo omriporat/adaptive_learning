@@ -7,28 +7,19 @@ Created on Tue Jun 24 13:26:20 2025
 """
 
 
-import sys, os
+import os
+from math import ceil
 import torch
-from torch.cpu import device_count
-import torch.nn.functional as F
-from torch.utils.data import Subset
-import loralib as lora
-import scipy.stats
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
-import einops
+import numpy as np
 
+from models import plmEmbeddingModel, EpiNNet
+from utils import online_mine_triplets, get_one_hot_encoding
+from dataset import PREActivityDataset
+from embedder import embeddings_evaluate_function, embeddings_finalize_function, epinnet_evaluate_function, epinnet_finalize_function
 
-import time
-
-
-from utils import *
-from dataset import *
-from embedder import *
-from plm_base import *
-
-
+CE_IGNORE_INDEX = -66
 
 
 def get_indices(sequence_df, nmuts, nmuts_column="num_of_muts", rev=False, verbose=False):
@@ -384,7 +375,8 @@ def train_msa_backbone(
     if model is None:
         model = plmEmbeddingModel(
             plm_name=plm_name,
-            emb_only=False
+            emb_only=False,
+            logits_only=True,
             # opmode=opmode,
             # logits_only=logits_only,
             # hidden_layers=hidden_layers,
@@ -473,7 +465,7 @@ def train_msa_backbone(
             logits = model(masked_sequence)
 
             # Get the ground truth labels on masked positiosn
-            gt_labels = (((torch.ones(x.shape, device=device) - mask_pos_matrix) * -66) + (x * mask_pos_matrix)).view(-1)
+            gt_labels = (((torch.ones(x.shape).to(device) - mask_pos_matrix) * CE_IGNORE_INDEX) + (x * mask_pos_matrix)).view(-1)
             total_loss = ce_loss_fn(logits.view(-1, len(model.vocab)), gt_labels.to(torch.long))
 
             epoch_loss += total_loss.item()
@@ -560,7 +552,6 @@ def train_evaluate_plms(config):
         model.plm.load_state_dict(backbone_weights, strict=True)
 
     train_test_dataset = PREActivityDataset(
-        train_project_name="triplet_training",
         evaluation_path=config["save_path"],
         dataset_path=config["dataset_path"],
         train_indices=train_indices_func,
@@ -643,7 +634,6 @@ def train_evaluate_epinnet(config):
         epinnet_model.load_state_dict(backbone_weights)
 
     train_test_dataset = PREActivityDataset(
-        train_project_name="triplet_training",
         evaluation_path=config["save_path"],
         dataset_path=config["dataset_path"],
         train_indices=train_indices_func,
@@ -696,7 +686,8 @@ def train_evaluate_msa_backbone(config):
     msa_backbone_model =\
      plmEmbeddingModel(
         plm_name=plm_name,
-        emb_only = False
+        emb_only = False,
+        logits_only = True
         # opmode="pos",
         # logits_only = True,
         # hidden_layers=[516,256],
@@ -713,7 +704,6 @@ def train_evaluate_msa_backbone(config):
 
     # Prepare dataset (assuming similar interface as PREActivityDataset)
     train_test_dataset = PREActivityDataset(
-        train_project_name="triplet_training",
         evaluation_path=config["save_path"],
         dataset_path=config["dataset_path"],
         train_indices=None,
@@ -723,7 +713,6 @@ def train_evaluate_msa_backbone(config):
         cache=True,
         lazy_load=True,
         sequence_column_name=config["sequence_column_name"],
-        pad_region_label=config["pad_region_label"],
         label_column_name=None, # This should be none so the labels would be just the indices
         ref_seq=config["ref_seq"],
         labels_dtype=torch.float32,
