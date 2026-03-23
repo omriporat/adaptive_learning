@@ -29,6 +29,13 @@ def parse_args(args=None):
         action="store_false",
         default=argparse.SUPPRESS
     )
+    parser.add_argument("--delta_embeddings",
+        action="store_true",
+        default=argparse.SUPPRESS)
+    parser.add_argument("--no-delta_embeddings",
+        dest="delta_embeddings",
+        action="store_false",
+        default=argparse.SUPPRESS)
     parser.add_argument("--log_for_bootstrap",
         action="store_true",
         default=argparse.SUPPRESS)
@@ -52,7 +59,7 @@ def parse_args(args=None):
     return args
 
 
-def load_config(config_path: str = f"{CONFIG_DIR}/{CONFIG_NAME}", args: list = None, create_dirs: bool = True) -> dict:
+def load_config(config_path: str = f"{CONFIG_DIR}/{CONFIG_NAME}", args: list = None, create_dirs: bool = True, verbose: bool = True) -> dict:
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     
@@ -80,11 +87,12 @@ def load_config(config_path: str = f"{CONFIG_DIR}/{CONFIG_NAME}", args: list = N
     finetune_tag = "finetune" if finetune else "naive"
     config["finetune_tag"] = finetune_tag
     config["embeddings_path"] = f"{root_path}/{data_dir}/{config['enzyme']}/{tag}/embeddings_{opmode}_{finetune_tag}.npy"
-    config["embeddings_clusters_path"] = f"{config['save_path']}/clusters_{opmode}_{finetune_tag}.npy"
-    config["sequence_clusters_path"] = f"{config['save_path']}/sequence_clusters_{opmode}_{finetune_tag}.npy"
+    
 
     config["data_dir_path"] = f"{root_path}/{data_dir}/{config['enzyme']}/{tag}"
     config["results_path"] = f"{root_path}/{config['results_dir_name']}/{config['enzyme']}/{tag}"
+    config["embeddings_clusters_path"] = f"{config['results_path']}/clusters_{opmode}_{finetune_tag}_{config["cluster_method"]}.npy"
+    config["sequence_clusters_path"] = f"{config['results_path']}/sequence_clusters_{opmode}_{finetune_tag}.npy"
 
     config["substrate_specific_results_path"] = f"{config['results_path']}/{config['substrate']}"
     config["substrate_specific_dataset_path"] = f"{root_path}/{data_dir}/{config['enzyme']}/{tag}/{config['substrate']}/{dataset_name}"
@@ -101,8 +109,10 @@ def load_config(config_path: str = f"{CONFIG_DIR}/{CONFIG_NAME}", args: list = N
         os.makedirs(config["substrate_specific_results_path"], exist_ok=True)
 
     # pretty print the config
-    print("Loaded configuration:")
-    for key, value in config.items():
-        print(f"  {key}: {value}")
+    if verbose:
+        print("Loaded configuration:")
+        for key, value in config.items():
+            print(f"  {key}: {value}")
+            print()
 
     return config

@@ -72,7 +72,7 @@ def get_embeddings(dataset: PREDataset,model: torch.nn.Module, positions: List[i
 
 def main():
     # Load configuration from YAML file
-    config = load_config("configs/config_original_paper.yaml")
+    config = load_config("configs/config_PTE.yaml")
     plm_init(config["root_path"])
     enzyme = config["enzyme"]
     finetune = config.get("finetune", False)

@@ -14,6 +14,7 @@ model_type: "plm"
 finetune: False
 opmode: "mean"
 train_type: "msa_backbone"
+cluster_method: "spherical_kmeans"
 
 # Strings
 nmuts_column: "num_muts"

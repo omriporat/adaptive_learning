@@ -5,8 +5,9 @@ import pandas as pd
 import umap
 from config import load_config
 from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import squareform, cdist, pdist
 from sklearn.cluster import AgglomerativeClustering, KMeans, DBSCAN
+from external.spherical_kmeans import SphericalKMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import pairwise_distances
 
@@ -22,6 +23,8 @@ def plot_embeddings(
     cluster_labels=None,
     fold_improvements=None,
     finetune_tag: str = "naive",
+    cluster_method: str = "kmeans",
+    delta_embedding_tag: str = "regular_embeddings",
 ):
     "Create a UMAP plot of the embeddings"
     reducer = umap.UMAP()
@@ -86,10 +89,13 @@ def plot_embeddings(
         )
         plt.legend()
 
+    # change background color
+    # plt.gca().set_facecolor("lightsteelblue")
+
     plt.title(
-        f"UMAP projection\n{enzyme} - {substrate}\nMode: {opmode}, {finetune_tag}"
+        f"UMAP projection\n{enzyme} - {substrate}\nMode: {opmode}, {finetune_tag}, {cluster_method}, {delta_embedding_tag}"
     )
-    plt.savefig(f"{save_dir}/umap_projection_{opmode}_{finetune_tag}.png")
+    plt.savefig(f"{save_dir}/umap_projection_{opmode}_{finetune_tag}_{cluster_method}_{delta_embedding_tag}.png")
 
 
 def plot_logos(
@@ -98,9 +104,10 @@ def plot_logos(
     results_dir: str,
     opmode: str,
     finetune_tag: str,
-    cluster_type: str = "kmeans_embedding",
+    cluster_method: str = "kmeans_embedding",
     enzyme="PTE",
     clustering_type="kmeans_embedding",
+    delta_embedding_tag="regular_embeddings",
 ):
     "Create sequence logos for each cluster and plot them in the same figure"
     n_clusters = len(np.unique(cluster_labels))
@@ -122,7 +129,7 @@ def plot_logos(
         plt.title(f"Cluster {cluster_id} (n={len(cluster_seqs)})")
     plt.suptitle(f"Sequence Logos for {enzyme} Clusters", fontsize=16)
     plt.savefig(
-        f"{results_dir}/cluster_logos_{clustering_type}_{opmode}_{finetune_tag}_{cluster_type}.png"
+        f"{results_dir}/cluster_logos_{cluster_method}_{opmode}_{finetune_tag}_{cluster_method}_{delta_embedding_tag}.png"
     )
 
 
@@ -130,15 +137,28 @@ def cluster_embeddings(
     embeddings,
     n_clusters: int,
     save_path: str,
+    spherical: bool = False,
 ):
-    model = KMeans(n_clusters=n_clusters, random_state=42)
-    cluster_labels = model.fit_predict(embeddings)
+    if spherical:
+        model = SphericalKMeans(n_clusters=n_clusters, random_state=42)
+        model.fit(embeddings)
+        cluster_labels = model.labels_
+    else:
+        model = KMeans(n_clusters=n_clusters, random_state=42)
+        cluster_labels = model.fit_predict(embeddings)
     representative_indices = []
     for cluster_id in range(n_clusters):
         cluster_indices = np.where(cluster_labels == cluster_id)[0]
         cluster_embeddings = embeddings[cluster_indices]
         cluster_center = model.cluster_centers_[cluster_id]
-        distances = np.linalg.norm(cluster_embeddings - cluster_center, axis=1)
+
+        if spherical:
+            # for spherical kmeans, use cosine distance
+            distances = cdist(cluster_embeddings, cluster_center.reshape(1, -1), metric="cosine").flatten()
+        else:
+            # for regular kmeans, use euclidean distance
+            distances = np.linalg.norm(cluster_embeddings - cluster_center, axis=1)
+
         representative_index = cluster_indices[np.argmin(distances)]
         representative_indices.append(representative_index)
 
@@ -404,12 +424,18 @@ def position_specific_vocabulary(sequences, cluster_labels, position, save_path:
 
 
 
-
-
 def main():
-    n_clusters = 25
-    config = load_config("config_PTE.yaml")
+    n_clusters = 30
+    config = load_config("configs/config_PTE.yaml")
     embeddings = np.load(config["embeddings_path"])
+    wt_embedding = embeddings[0]
+    delta_embeddings = embeddings - wt_embedding
+    if config.get("delta_embeddings", False):
+        print("Using delta embeddings (subtracting WT embedding from all embeddings)")
+        embeddings = delta_embeddings
+    
+    embeddings = embeddings[1:]  # exclude WT from clustering and plotting
+
     # distance_histogram(
     #     embeddings,
     #     save_path=config["results_path"],
@@ -424,21 +450,65 @@ def main():
     #     opmode=config["opmode"],
     #     finetune_tag=config["finetune_tag"],
     # )
-    cluster_labels, representative_indices = cluster_embeddings(
+    if "cluster_method" not in config:
+        raise ValueError("cluster_method not specified in config file.")
+
+    if config["cluster_method"] == "kmeans":
+        print("Clustering embeddings with KMeans...")
+        cluster_labels, representative_indices = cluster_embeddings(
         embeddings,
         n_clusters=n_clusters,
         save_path=config["embeddings_clusters_path"],
+        spherical=False,
+    )
+    elif config["cluster_method"] == "spherical_kmeans":
+        print("Clustering embeddings with Spherical KMeans...")
+        cluster_labels, representative_indices = cluster_embeddings(
+            embeddings,
+            n_clusters=n_clusters,
+            save_path=config["embeddings_clusters_path"],
+            spherical=True,
+        )
+    elif config["cluster_method"] == "dbscan":
+        print("Clustering embeddings with DBSCAN...")
+        cluster_labels, representative_indices = cluster_embeddings_dbscan(
+            embeddings,
+            eps=0.52,
+            min_samples=10,
+            save_path=config["embeddings_clusters_path"],
+        )
+    else:
+        raise ValueError(f"Unknown cluster_method: {config['cluster_method']}")
+
+        # save representatives as df
+
+    # force serial_number to be read as string to keep the leading zeros
+    sequences_df = pd.read_csv(config["dataset_path"], dtype={"serial_number": str})
+    representatives_df = sequences_df.iloc[representative_indices]
+
+    if config.get("delta_embeddings", False):
+        delta_embedding_tag = "delta_embeddings"
+    else:
+        delta_embedding_tag = "regular_embeddings"
+
+    representatives_df.to_csv(
+        f"{config['results_path']}/cluster_representative_sequences_{config['opmode']}_{config['finetune_tag']}_{config['cluster_method']}_{delta_embedding_tag}.csv",
+        index=False,
     )
 
-    # plot_embeddings(
-    #     embeddings,
-    #     enzyme=config["enzyme"],
-    #     substrate=config["substrate"],
-    #     save_dir=config["results_path"],
-    #     cluster_labels=cluster_labels,
-    #     finetune_tag=config["finetune_tag"],
-    #     opmode=config["opmode"],
-    # )
+    plot_embeddings(
+        embeddings,
+        enzyme=config["enzyme"],
+        substrate=config["substrate"],
+        save_dir=config["results_path"],
+        cluster_labels=cluster_labels,
+        finetune_tag=config["finetune_tag"],
+        opmode=config["opmode"],
+        cluster_method=config["cluster_method"],
+        delta_embedding_tag=delta_embedding_tag,
+    )
+
+    return
 
     # within_cluster_distances(
     #     embeddings,
@@ -460,7 +530,7 @@ def main():
     # )
     
 
-    sequences_df = pd.read_csv(config["dataset_path"])
+    sequences_df = pd.read_csv(config["dataset_path"], dtype={"serial_number": str})
     # use only the specific positions
     sequences = sequences_df["full_seq"]
     sequences = sequences.apply(
@@ -489,15 +559,6 @@ def main():
     #     print(f"Cluster {cluster_id}: Sequence Index {rep_idx}, Sequence: {sequences.iloc[rep_idx]}")
     #     print(sequences_df.iloc[rep_idx])
 
-    
-    # save representatives as df
-
-    return
-    representatives_df = sequences_df.iloc[representative_indices]
-    representatives_df.to_csv(
-        f"{config['results_path']}/cluster_representative_sequences_{config['opmode']}_{config['finetune_tag']}.csv",
-        index=False,
-    )
 
     dbscan_representatives_df = sequences_df.iloc[dbscan_representative_indices]
     dbscan_representatives_df.to_csv(

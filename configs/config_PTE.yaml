@@ -7,13 +7,14 @@ enzyme: "PTE"
 substrate: "malathion"
 
 dataset_filename: "adaptive_learning_stage_0.csv"
-tag: "zero_shot"
+tag: "adaptive"
 weights_filename: "final_model.pt"
 
 model_type: "plm"
 finetune: False
-opmode: "flat"
+opmode: "mean"
 train_type: "msa_backbone"
+cluster_method: "spherical_kmeans"
 
 # Strings
 nmuts_column: "num_muts"
@@ -41,7 +42,7 @@ evaluate_train: False
 evaluate_test: False
 train_drop_tokens: True
 inference_drop_tokens: False
-
+delta_embeddings: False
 
 # Integers
 lr: 4e-6

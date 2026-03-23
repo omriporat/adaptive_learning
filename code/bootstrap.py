@@ -1,5 +1,6 @@
 # %%
 import sys
+from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,14 +15,22 @@ from sklearn.metrics import (
 )
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.naive_bayes import GaussianNB
+from sklearn.cross_decomposition import CCA
+from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVC
 from scipy.stats import spearmanr
 
 from config import load_config
 
 
-def get_oh_table(dataset_path: str, first_col: str, last_col: str, y_col: str) -> pd.DataFrame:
-    experimental_results_df = pd.read_csv(dataset_path)
+def get_oh_table(dataset, first_col: str, last_col: str, y_col: str) -> Tuple[
+    pd.DataFrame, pd.Series, pd.Series
+]:
+    if isinstance(dataset, str):
+        experimental_results_df = pd.read_csv(dataset)
+    else:
+        experimental_results_df = dataset
+
     experimental_results_df = experimental_results_df[
         experimental_results_df["design"] != -1
     ]
@@ -278,7 +287,9 @@ def bootstrap_regressor(
         mlp_reg_oh.fit(X_train_oh, y_train)
         emb_predictions = mlp_reg_emb.predict(X_test_emb)
         if np.var(emb_predictions) < 0.01:
-            print(f"Low variance detected in embedding-based predictions: {np.var(emb_predictions)}")
+            print(
+                f"Low variance detected in embedding-based predictions: {np.var(emb_predictions)}"
+            )
             # print indices in list format
             print(f"Indices used for training: {train_indices_without}")
             print(f"Indices used for testing: {test_indices_without}")
@@ -312,7 +323,7 @@ def bootstrap_regressor(
 
         print(
             f"Iteration {i + 1}/{n_iterations}: Embedding Spearman: {emb_spearman:.4f}, One-Hot Spearman: {oh_spearman:.4f}",
-            flush=True
+            flush=True,
         )
 
     # return as dataframe
@@ -327,6 +338,30 @@ def bootstrap_regressor(
     return results_df
 
 
+def bootstrap_cca(X, y, n_iterations: int = 1000, train_fraction: float = 0.8):
+    results = []
+    for i in range(n_iterations):
+        n_train_samples = int(len(y) * train_fraction)
+        train_indices = np.random.choice(
+            y.shape[0], size=n_train_samples, replace=False
+        )
+        test_indices = np.setdiff1d(np.arange(y.shape[0]), train_indices)
+        X_train = X[train_indices]
+        X_test = X[test_indices]
+        y_train = y[train_indices]
+        y_test = y[test_indices]
+
+        cca = CCA(n_components=1)
+        cca.fit(X_train, y_train.values.reshape(-1, 1))
+        y_test_pred = cca.predict(X_test)
+        corr_test = np.corrcoef(y_test_pred.T, y_test.values.reshape(-1, 1).T)[0, 1]
+
+        results.append(corr_test)
+        print(f"Iteration {i + 1}/{n_iterations}: CCA correlation: {corr_test:.4f}")
+
+    return results
+
+
 def boxplot_regressor_results(
     embedding_corr,
     oh_corr,
@@ -337,6 +372,7 @@ def boxplot_regressor_results(
     mode: str,
     test_frac: float,
     log_tag: str,
+    delta_embedding_tag: str,
     results_path: str,
 ):
     plt.figure(figsize=(8, 6))
@@ -348,13 +384,13 @@ def boxplot_regressor_results(
     )
     sns.boxplot(x="Method", y=corr_type, data=plot_df, palette=["blue", "orange"])
     plt.title(
-        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - Test Fraction: {test_frac}"
+        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - {delta_embedding_tag} - Test Fraction: {test_frac}"
     )
     plt.ylabel(corr_type)
     plt.xlabel("Method")
     print(f"Saving regressor bootstrap plot in {results_path}")
     plt.savefig(
-        f"{results_path}/regressor_bootstrap_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{corr_type}.png"
+        f"{results_path}/regressor_bootstrap_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{delta_embedding_tag}_{corr_type}.png"
     )
     plt.close()
 
@@ -369,6 +405,7 @@ def scatter_regressor_results(
     mode: str,
     test_frac: float,
     log_tag: str,
+    delta_embedding_tag: str,
     results_path: str,
 ):
     # like a boxplot, but connect paired points with lines
@@ -385,15 +422,126 @@ def scatter_regressor_results(
             color=color,
         )
     plt.title(
-        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - Test Fraction: {test_frac}"
+        f"Bootstrap Regressor - {corr_type} correlations\n{enzyme} - {substrate}\n{finetune_tag} - {mode} - {log_tag} - {delta_embedding_tag} - Test Fraction: {test_frac}"
     )
     plt.ylabel(corr_type)
     plt.xlabel("Method")
     print(f"Saving regressor bootstrap scatter plot in {results_path}")
     plt.savefig(
-        f"{results_path}/regressor_bootstrap_scatter_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{corr_type}.png"
+        f"{results_path}/regressor_bootstrap_scatter_{finetune_tag}_{mode}_{test_frac}_{log_tag}_{delta_embedding_tag}_{corr_type}.png"
     )
     plt.close()
+
+
+def get_cca_corr(X, y, train_indices, test_indices):
+    X_train = X[train_indices]
+    X_test = X[test_indices]
+    y_train = y[train_indices]
+    y_test = y[test_indices]
+
+    cca = CCA(n_components=1)
+    cca.fit(X_train, y_train.reshape(-1, 1))
+    y_test_pred = cca.predict(X_test)
+    corr_test = np.corrcoef(y_test_pred.T, y_test.reshape(-1, 1).T)[0, 1]
+
+    return corr_test
+
+
+def bootstrap_indices_generator(
+    n_samples: int, train_fraction: float, n_iterations: int
+):
+    n_train_samples = int(n_samples * train_fraction)
+    for _ in range(n_iterations):
+        train_indices = np.random.choice(
+            n_samples, size=n_train_samples, replace=False
+        )
+        test_indices = np.setdiff1d(np.arange(n_samples), train_indices)
+        yield train_indices, test_indices
+
+
+def main_cca():
+    config = load_config("configs/config_original_paper.yaml", args=["--opmode", "mean"])
+    mean_embeddings_with_wt = np.load(config["embeddings_path"], allow_pickle=True)
+    wt_mean_embedding = mean_embeddings_with_wt[0]
+    config = load_config("configs/config_original_paper.yaml", args=["--opmode", "flat"])
+    flat_embeddings_with_wt = np.load(config["embeddings_path"], allow_pickle=True)
+    wt_flat_embedding = flat_embeddings_with_wt[0]
+
+    assert mean_embeddings_with_wt.shape[1] == 480
+    assert flat_embeddings_with_wt.shape[1] == 480 * len(config["pos_to_use"])
+
+    mean_delta_embeddings = mean_embeddings_with_wt - wt_mean_embedding
+    flat_delta_embeddings = flat_embeddings_with_wt - wt_flat_embedding
+    assert (mean_delta_embeddings[0] == np.zeros_like(wt_mean_embedding)).all()
+    assert (flat_delta_embeddings[0] == np.zeros_like(wt_flat_embedding)).all()
+
+    oh_funclib_df_with_wt, y, design_numbers = get_oh_table(
+        config["substrate_specific_dataset_path"],
+        first_col=config["first_column_name"],
+        last_col=config["last_column_name"],
+        y_col=config["continuous_activity_column"],
+    )
+    
+    # drop wt from all datasets
+    mean_embeddings = mean_embeddings_with_wt[1:]
+    flat_embeddings = flat_embeddings_with_wt[1:]
+    mean_delta_embeddings = mean_delta_embeddings[1:]
+    flat_delta_embeddings = flat_delta_embeddings[1:]
+    oh_funclib_df = oh_funclib_df_with_wt.iloc[1:, :].to_numpy()
+    y = y.iloc[1:].to_numpy()
+    if config["log_for_bootstrap"]:
+        y = np.log(y + 1e-6)
+        log_tag = "log"
+    else:
+        log_tag = "no_log"
+    design_numbers = design_numbers.iloc[1:].to_numpy()
+
+    assert mean_embeddings.shape[0] == mean_delta_embeddings.shape[0] == flat_embeddings.shape[0] == flat_delta_embeddings.shape[0] == oh_funclib_df.shape[0] == y.shape[0] == design_numbers.shape[0]
+
+    results = []
+
+    train_fraction = config["train_fraction"]
+    print(f"Bootstrapping CCA with train fraction {train_fraction} for {config['n_bootstrap']} iterations")
+    for train_indices, test_indices in bootstrap_indices_generator(
+        n_samples=y.shape[0], train_fraction=train_fraction, n_iterations=config["n_bootstrap"]
+    ):
+        mean_embeddings_corr = get_cca_corr(
+            mean_embeddings, y, train_indices, test_indices
+        )
+        flat_embeddings_corr = get_cca_corr(
+            flat_embeddings, y, train_indices, test_indices
+        )
+        mean_delta_embeddings_corr = get_cca_corr(
+            mean_delta_embeddings, y, train_indices, test_indices
+        )
+        flat_delta_embeddings_corr = get_cca_corr(
+            flat_delta_embeddings, y, train_indices, test_indices
+        )
+        oh_corr = get_cca_corr(
+            oh_funclib_df, y, train_indices, test_indices
+        )
+        results.append({
+            "mean": mean_embeddings_corr,
+            "flat": flat_embeddings_corr,
+            "mean_delta": mean_delta_embeddings_corr,
+            "flat_delta": flat_delta_embeddings_corr,
+            "one_hot": oh_corr,
+        })
+        print(f"Iteration {len(results)}/{config['n_bootstrap']}: CCA correlations - Mean: {mean_embeddings_corr:.4f}, Flat: {flat_embeddings_corr:.4f}, Mean Delta: {mean_delta_embeddings_corr:.4f}, Flat Delta: {flat_delta_embeddings_corr:.4f}, One-Hot: {oh_corr:.4f}")
+    results_df = pd.DataFrame(results)
+    # save results to csv
+    results_df.to_csv(f"{config['substrate_specific_results_path']}/cca_bootstrap_results_{train_fraction}_{log_tag}.csv", index=False)
+    # plot boxplot of results
+    plt.figure(figsize=(10, 10))
+    plot_df = pd.melt(results_df, var_name="Method", value_name="CCA Correlation")
+    ax = sns.boxplot(x="Method", y="CCA Correlation", data=plot_df, palette="Set2")
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    plt.title(f"CCA Bootstrap Results\n{config['enzyme']} - {config['substrate']} - Train Fraction: {train_fraction} - {log_tag}")
+    plt.ylabel("CCA Correlation")
+    plt.xlabel("Method")
+    plt.savefig(f"{config['substrate_specific_results_path']}/cca_bootstrap_results_{train_fraction}_{log_tag}.png")
+
+    return results_df
 
 
 def main():
@@ -408,13 +556,32 @@ def main():
 
     if config["log_for_bootstrap"]:
         y = np.log(y + 1e-6)
+    
+    if "delta_embeddings" in config and config["delta_embeddings"]:
+        wt_embedding = embeddings[0]
+        embeddings = embeddings - wt_embedding
+        print("Using delta embeddings for bootstrapping")
+        assert (embeddings[0] == np.zeros_like(wt_embedding)).all()
+        embeddings = embeddings[1:, :]
+        oh_funclib_df = oh_funclib_df.iloc[1:, :]
+        y = y.iloc[1:]
+        # reset indices
+        oh_funclib_df.reset_index(drop=True, inplace=True)
+        y.reset_index(drop=True, inplace=True)
 
     train_fraction = config["train_fraction"]
     print(f"Bootstrapping regressor with train fraction {train_fraction}")
     if config["log_for_bootstrap"]:
         result_tag = f"{train_fraction}_{config['finetune_tag']}_{config['opmode']}_log"
     else:
-        result_tag = f"{train_fraction}_{config['finetune_tag']}_{config['opmode']}_no_log"
+        result_tag = (
+            f"{train_fraction}_{config['finetune_tag']}_{config['opmode']}_no_log"
+        )
+    if "delta_embeddings" in config and config["delta_embeddings"]:
+        result_tag += "_delta_embeddings"
+    else:
+        result_tag += "_no_delta_embeddings"
+
     results_df = bootstrap_regressor(
         oh_funclib_df,
         embeddings,
@@ -439,6 +606,7 @@ def main():
         mode=config["opmode"],
         test_frac=train_fraction,
         log_tag="log" if config["log_for_bootstrap"] else "no_log",
+        delta_embedding_tag="delta_embeddings" if ("delta_embeddings" in config and config["delta_embeddings"]) else "no_delta_embeddings",
         results_path=config["substrate_specific_results_path"],
     )
     scatter_regressor_results(
@@ -451,6 +619,7 @@ def main():
         mode=config["opmode"],
         test_frac=train_fraction,
         log_tag="log" if config["log_for_bootstrap"] else "no_log",
+        delta_embedding_tag="delta_embeddings" if ("delta_embeddings" in config and config["delta_embeddings"]) else "no_delta_embeddings",
         results_path=config["substrate_specific_results_path"],
     )
 

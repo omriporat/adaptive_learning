@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 import string
-
+from Bio import SeqIO
 
 # from Bio import pairwise2
 # from Bio.Seq import Seq
@@ -275,3 +275,10 @@ def online_mine_triplets(labels):
                 triplets.append((i, pos_idx.item(), neg_idx.item()))
                 
     return triplets
+
+
+def get_columns_between(df: pd.DataFrame, first_col: str, last_col: str):
+    columns = df.columns.tolist()
+    start_idx = columns.index(first_col)
+    end_idx = columns.index(last_col) + 1
+    return df.iloc[:, start_idx:end_idx]
